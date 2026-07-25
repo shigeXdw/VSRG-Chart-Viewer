@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>B62 BMS Player</title>
-  <link rel="stylesheet" href="styles.css?v=21">
+  <title>VSRG Chart Viewer</title>
+  <link rel="stylesheet" href="styles.css?v=34">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="https://github.com/shigeXdw" target="_blank" rel="noopener noreferrer" title="Visit shigeXdw on GitHub">
       <img class="brand-mark" src="shigexdw-logo.png" alt="shigeXdw">
       <div>
-        <strong>BMS Player</strong>
+        <strong>VSRG Chart Viewer</strong>
         <small>by shigeXdw</small>
       </div>
     </a>
@@ -20,35 +20,25 @@
       <button class="view-tab" type="button" data-view="inspector" aria-selected="false">Chart Inspector</button>
     </nav>
     <div class="transport">
-      <button id="openFileButton" class="command">Open files</button>
-      <button id="openFolderButton" class="command">Open folder</button>
+      <div id="openMenu" class="open-menu">
+        <button id="openButton" class="command" type="button" aria-haspopup="menu" aria-expanded="false">Open</button>
+        <div id="openMenuPanel" class="open-menu-panel" role="menu" hidden>
+          <button id="openFilesOption" type="button" role="menuitem">Files / ZIP</button>
+          <button id="openFolderOption" type="button" role="menuitem">Folder</button>
+        </div>
+      </div>
       <select id="chartSelect" aria-label="Chart" disabled>
         <option>No chart loaded</option>
       </select>
     </div>
   </header>
 
-  <main id="playerView" class="workspace app-view">
+  <main id="playerView" class="workspace app-view side-collapsed">
     <section class="playfield-panel">
       <canvas id="playfield"></canvas>
       <div id="judgement" class="judgement">
         <strong id="judgeText">0000 / 0000</strong>
       </div>
-      <section class="live-stats" aria-label="Live statistics">
-        <div>
-          <span>KPS</span>
-          <strong id="currentKps">0.0</strong>
-        </div>
-        <div>
-          <span>Peak KPS</span>
-          <strong id="peakKps">0.0</strong>
-        </div>
-        <div>
-          <span>Density</span>
-            <strong id="density">0</strong>
-            <small>notes/sec, last 2s</small>
-        </div>
-      </section>
       <div class="seekbar">
         <button id="backButton" title="Back 10 seconds" disabled>-10</button>
         <button id="playButton" class="timeline-button" title="Play or pause" disabled>&#9654;</button>
@@ -58,19 +48,18 @@
       </div>
     </section>
 
-    <aside class="side-panel">
+    <aside id="playerSidePanel" class="side-panel">
       <div class="movie-stage">
         <canvas id="bgaCanvas"></canvas>
         <video id="bga" muted playsinline></video>
         <video id="bgaLayerVideo" muted playsinline></video>
         <div id="moviePlaceholder">NO BGA</div>
       </div>
-
       <section class="song-info">
         <div class="title-row">
           <div>
-            <span id="genre">BMS</span>
-            <h1 id="title">Choose a folder</h1>
+            <span id="genre">VSRG</span>
+            <h1 id="title">Choose a VSRG chart folder</h1>
             <p id="artist">Local files stay on your device</p>
           </div>
           <span id="difficulty" class="difficulty">--</span>
@@ -84,97 +73,145 @@
         </dl>
       </section>
 
-      <section class="settings">
-        <div class="setting-group">
-          <h2>Scroll</h2>
-          <label>
-            <span>Mode</span>
-            <select id="scrollMode" aria-label="Scroll mode">
-            <option value="iidx" selected>IIDX Floating Hi-Speed</option>
-              <option value="fixed">Fixed px/sec</option>
-            </select>
-            <output id="scrollModeValue" title="Green number (note visibility in milliseconds)">--</output>
-          </label>
-          <label>
-            <span id="speedLabel">Hi-Speed</span>
-            <input id="speed" type="range" min="1" max="1999" value="200" step="1">
-            <input id="speedValue" class="number-value" type="number" min="0.01" max="19.99" value="2.00" step="0.01" aria-label="Hi-Speed value">
-          </label>
-        </div>
+      <button id="sidePanelToggle" class="side-panel-toggle" type="button" aria-controls="playerExtras" aria-expanded="false" title="Show KPS and notes radar">Stats</button>
+      <button id="bgaBackdropToggle" class="bga-backdrop-toggle" type="button" aria-pressed="false" title="Show BGA behind playfield">BGA</button>
+      <div id="playerExtras" class="side-extras">
+        <section class="live-stats" aria-label="Live statistics">
+          <div>
+            <span>KPS</span>
+            <strong id="currentKps">0.0</strong>
+          </div>
+          <div>
+            <span>Peak KPS</span>
+            <strong id="peakKps">0.0</strong>
+          </div>
+          <div class="player-radar-card">
+            <span>Notes radar</span>
+            <canvas id="playerNotesRadar" width="180" height="150"></canvas>
+          </div>
+        </section>
+      </div>
 
-        <div class="setting-group">
-          <h2>Playfield</h2>
-          <div class="mod-control">
-            <span>Lane mod</span>
-            <div class="mod-buttons" role="group" aria-label="Lane modifier">
-              <button type="button" class="mod-button active" data-mod="normal">Normal</button>
-              <button type="button" class="mod-button" data-mod="mirror">Mirror</button>
-              <button type="button" class="mod-button" data-mod="random">Random</button>
-              <button type="button" class="mod-button" data-mod="rrandom">R-Random</button>
-              <button type="button" class="mod-button" data-mod="srandom">S-Random</button>
+      <section class="settings">
+          <div class="setting-group">
+            <h2>Scroll</h2>
+            <label>
+              <span>Mode</span>
+              <select id="scrollMode" aria-label="Scroll mode">
+              <option value="iidx" selected>IIDX Floating Hi-Speed</option>
+                <option value="fixed">Fixed px/sec</option>
+              </select>
+              <output id="scrollModeValue" title="Green number (note visibility in milliseconds)">--</output>
+            </label>
+            <label hidden>
+              <span>Direction</span>
+              <select id="stepmaniaScrollDirection" aria-label="StepMania scroll direction">
+                <option value="up" selected>Upscroll</option>
+                <option value="down">Downscroll</option>
+              </select>
+              <output>SM</output>
+            </label>
+            <label hidden>
+              <span>Receptor Column Spacing</span>
+              <input id="stepmaniaColumnSpacing" type="range" min="70" max="120" value="92" step="1" autocomplete="off">
+              <output id="stepmaniaColumnSpacingValue">92%</output>
+            </label>
+            <label>
+              <span id="speedLabel">Hi-Speed</span>
+              <input id="speed" type="range" min="1" max="1999" value="200" step="1">
+              <input id="speedValue" class="number-value" type="number" min="0.01" max="19.99" value="2.00" step="0.01" aria-label="Hi-Speed value">
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <h2>Playfield</h2>
+            <div class="mod-control">
+              <span>Lane mod</span>
+              <div class="mod-buttons" role="group" aria-label="Lane modifier">
+                <button type="button" class="mod-button active" data-mod="normal">Normal</button>
+                <button type="button" class="mod-button" data-mod="mirror">Mirror</button>
+                <button type="button" class="mod-button" data-mod="random">Random</button>
+                <button type="button" class="mod-button" data-mod="rrandom">R-Random</button>
+                <button type="button" class="mod-button" data-mod="srandom">S-Random</button>
+              </div>
+            </div>
+            <div id="laneArrangement" class="lane-arrangement">
+              <span>1P</span>
+              <output id="laneArrangement1">1 2 3 4 5 6 7</output>
+              <span id="laneArrangement2Label" hidden>2P</span>
+              <output id="laneArrangement2" hidden>1 2 3 4 5 6 7</output>
+            </div>
+            <div class="sudden-control">
+              <button id="suddenButton" type="button" class="option-button" aria-pressed="false">SUDDEN+</button>
+              <input id="suddenAmount" type="range" min="5" max="80" value="35" step="1" disabled>
+              <output id="suddenAmountValue">35%</output>
+            </div>
+            <label>
+              <span>Columns</span>
+              <input id="columnWidth" type="range" min="70" max="150" value="80" step="5" autocomplete="off">
+              <output id="columnWidthValue">80%</output>
+            </label>
+            <label>
+              <span>Scratch</span>
+              <input id="scratchWidth" type="range" min="110" max="220" value="155" step="5" autocomplete="off">
+              <output id="scratchWidthValue">155%</output>
+            </label>
+            <label>
+              <span>Note thickness</span>
+              <input id="noteThickness" type="range" min="4" max="18" value="8" step="1">
+              <output id="noteThicknessValue">8px</output>
+            </label>
+            <label>
+              <span>BGA blur</span>
+              <input id="bgaBlur" type="range" min="0" max="12" value="4" step="1">
+              <output id="bgaBlurValue">4px</output>
+            </label>
+            <label>
+              <span>BGA darkness</span>
+              <input id="bgaDarkness" type="range" min="0" max="85" value="48" step="1">
+              <output id="bgaDarknessValue">48%</output>
+            </label>
+            <label>
+              <span>Lane darkness</span>
+              <input id="laneDarkness" type="range" min="30" max="95" value="72" step="1">
+              <output id="laneDarknessValue">72%</output>
+            </label>
+            <label class="switch-row">
+              <span>Hit effects</span>
+              <input id="hitEffects" type="checkbox" checked>
+              <i aria-hidden="true"></i>
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <h2>Playback</h2>
+            <label class="speed-row">
+              <span>Song speed</span>
+              <input id="songSpeed" type="range" min="50" max="200" value="100" step="5" autocomplete="off">
+              <input id="songSpeedValue" class="number-value" type="number" min="50" max="200" value="100" step="1" aria-label="Song speed percentage">
+            </label>
+            <label>
+              <span>Volume</span>
+              <input id="volume" type="range" min="0" max="1" value="0.8" step="0.05">
+              <output id="volumeValue">80%</output>
+            </label>
+            <div class="switches">
+              <label class="switch-row">
+                <span>Pitch with speed</span>
+                <input id="pitchWithSpeed" type="checkbox" autocomplete="off">
+                <i aria-hidden="true"></i>
+              </label>
+              <label class="switch-row">
+                <span>Keysounds</span>
+                <input id="keysounds" type="checkbox" checked>
+                <i aria-hidden="true"></i>
+              </label>
             </div>
           </div>
-          <div id="laneArrangement" class="lane-arrangement">
-            <span>1P</span>
-            <output id="laneArrangement1">1 2 3 4 5 6 7</output>
-            <span id="laneArrangement2Label" hidden>2P</span>
-            <output id="laneArrangement2" hidden>1 2 3 4 5 6 7</output>
-          </div>
-          <div class="sudden-control">
-            <button id="suddenButton" type="button" class="option-button" aria-pressed="false">SUDDEN+</button>
-            <input id="suddenAmount" type="range" min="5" max="80" value="35" step="1" disabled>
-            <output id="suddenAmountValue">35%</output>
-          </div>
-          <label>
-            <span>Columns</span>
-            <input id="columnWidth" type="range" min="70" max="150" value="80" step="5" autocomplete="off">
-            <output id="columnWidthValue">80%</output>
-          </label>
-          <label>
-            <span>Scratch</span>
-            <input id="scratchWidth" type="range" min="110" max="220" value="155" step="5" autocomplete="off">
-            <output id="scratchWidthValue">155%</output>
-          </label>
-          <label>
-            <span>Note thickness</span>
-            <input id="noteThickness" type="range" min="4" max="18" value="8" step="1">
-            <output id="noteThicknessValue">8px</output>
-          </label>
-          <label class="switch-row">
-            <span>Hit effects</span>
-            <input id="hitEffects" type="checkbox" checked>
-            <i aria-hidden="true"></i>
-          </label>
-        </div>
 
-        <div class="setting-group">
-          <h2>Playback</h2>
-          <label class="speed-row">
-            <span>Song speed</span>
-            <input id="songSpeed" type="range" min="50" max="200" value="100" step="5" autocomplete="off">
-            <input id="songSpeedValue" class="number-value" type="number" min="50" max="200" value="100" step="1" aria-label="Song speed percentage">
-          </label>
-          <label>
-            <span>Volume</span>
-            <input id="volume" type="range" min="0" max="1" value="0.8" step="0.05">
-            <output id="volumeValue">80%</output>
-          </label>
-          <div class="switches">
-            <label class="switch-row">
-              <span>Pitch with speed</span>
-              <input id="pitchWithSpeed" type="checkbox">
-              <i aria-hidden="true"></i>
-            </label>
-            <label class="switch-row">
-              <span>Keysounds</span>
-              <input id="keysounds" type="checkbox" checked>
-              <i aria-hidden="true"></i>
-            </label>
-          </div>
-        </div>
       </section>
 
-      <div id="status" class="status">Choose a song folder containing BMS, BME, BMSON, osu!mania, or UMIGURI UGC files.</div>
+      <div id="status" class="status">Choose a chart folder containing VSRG files such as BMS, BME, BMSON, osu!mania, StepMania, Etterna, or UMIGURI UGC.</div>
     </aside>
   </main>
 
@@ -223,8 +260,6 @@
       <aside class="analysis-panel">
         <h2>Lane distribution</h2>
         <div id="laneDistribution" class="lane-distribution"></div>
-        <h2>Density timeline</h2>
-        <canvas id="densityGraph" width="320" height="150"></canvas>
         <h2>Notes radar</h2>
         <canvas id="notesRadar" width="320" height="270"></canvas>
         <div class="analysis-legend">
@@ -236,21 +271,26 @@
       </aside>
       <div id="inspectorScroller" class="inspector-scroller">
         <div id="measureGrid" class="measure-grid">
-          <p class="inspector-empty">Choose a song folder to build the chart overview.</p>
+          <p class="inspector-empty">Choose a chart folder to build the chart overview.</p>
+        </div>
+        <div class="inspector-density-footer">
+          <canvas id="densityGraph" width="900" height="150"></canvas>
         </div>
       </div>
     </section>
   </main>
 
-  <input id="fileInput" type="file" accept=".bms,.bme,.bmson,.osu,.osz,.ugc,.wav,.wave,.ogg,.oga,.opus,.mp3,.mp2,.m4a,.aac,.flac,.aif,.aiff,.weba,.caf,.mp4,.m4v,.webm,.ogv,.mov,.mpeg,.mpg,.mpe,.ts,.m2ts,.bmp,.png,.jpg,.jpeg,.gif,.webp,application/zip" multiple hidden>
+  <input id="fileInput" type="file" accept=".bms,.bme,.bmson,.osu,.osz,.zip,.sm,.ssc,.ugc,.wav,.wave,.ogg,.oga,.opus,.mp3,.mp2,.m4a,.aac,.flac,.aif,.aiff,.weba,.caf,.wma,.mp4,.m4v,.webm,.ogv,.mov,.mpeg,.mpg,.mpe,.ts,.m2ts,.wmv,.asf,.bmp,.png,.jpg,.jpeg,.gif,.webp,application/zip,application/x-zip-compressed" multiple hidden>
   <input id="folderInput" type="file" webkitdirectory multiple hidden>
   <script src="vendor/fflate.min.js"></script>
   <script src="vendor/rosu_pp_wasm.js"></script>
   <script src="vendor/rosu_pp_classic.js"></script>
-  <script src="modes/registry.js?v=1"></script>
+  <script src="modes/registry.js?v=2"></script>
   <script src="modes/bms/index.js?v=1"></script>
   <script src="modes/osu/index.js?v=1"></script>
+  <script src="assets/noteskins/ddr-night/tap-note-model-data.js?v=1"></script>
+  <script src="modes/stepmania/index.js?v=38"></script>
   <script src="modes/umiguri/index.js?v=48"></script>
-  <script src="app.js?v=31"></script>
+  <script src="app.js?v=89"></script>
 </body>
 </html>

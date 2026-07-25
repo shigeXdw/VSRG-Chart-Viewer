@@ -19,9 +19,10 @@
       const mode = this.find(file);
       if (!mode) return null;
       const chart = await mode.parse(file, context);
-      if (chart) {
-        chart.modeId = mode.id;
-        chart.mode = mode;
+      for (const item of Array.isArray(chart) ? chart : [chart]) {
+        if (!item) continue;
+        item.modeId = mode.id;
+        item.mode = mode;
       }
       return chart;
     },

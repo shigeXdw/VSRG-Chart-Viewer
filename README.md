@@ -1,26 +1,40 @@
-# VSRG Player
+# VSRG Chart Viewer
 
-Browser-based autoplay chart previewer with keysounds, BGA, lane mods, SUDDEN+, Hi-Speed, and live chart statistics. 
+Browser-based chart viewer for vertical scrolling rhythm game charts. It is built as a static web app and can run from GitHub Pages, a local web server, or directly from `index.html` for most workflows.
 
-## Live Player
+## Live Viewer
 
-[Open Player](https://shigexdw.github.io/VSRG-Chart-Viewer/)
+[Open VSRG Chart Viewer](https://shigexdw.github.io/VSRG-Chart-Viewer/)
+
+## Supported Formats
+
+- BMS / BME, including `#BASE 36` and `#BASE 62`
+- BMSON 1.0
+- osu!mania `.osu`, `.osz`, and regular `.zip` packs
+- StepMania / Etterna `.sm` and `.ssc`
+- UMIGURI `.ugc` V4 and V8 charts
 
 ## Features
 
-- `#BASE 36` and `#BASE 62`
-- BMSON 1.0 support
-- osu!mania `.osz` archives
-- 7-key and 14-key BMS charts`
-- UMIGURI V4, V8 support (wip)
-- MP4/M4V (including HEVC when the browser supports it), WebM, OGV, MOV,
-  MPEG, and transport-stream BGA video
-- Classic BMS image-sequence BGA
-- Normal, Mirror, Random, R-Random, and S-Random lane layouts
-- SUDDEN+, beatoraja-style IIDX Hi-Speed with green number, numeric playback
-  speed, and pitch controls
-- KPS, peak KPS, density, and note progress statistics
-- Textage-style chart inspector
-## Limitations
+- Autoplay chart preview with keysounds and song audio
+- BGA playback for browser-supported video formats and classic BMS image-sequence BGA
+- ZIP / OSZ loading for packed charts
+- IIDX-style Hi-Speed with green number, fixed px/sec mode, SUDDEN+, and song speed controls
+- Lane mods for BMS-style charts: Normal, Mirror, Random, R-Random, and S-Random
+- StepMania / Etterna upscroll and downscroll preview
+- KPS, peak KPS, notes radar, note progress, and BPM / green-number readouts
+- Textage-style chart inspector with note density, scratch density, BPM changes, and lane distribution
 
-This is an autoplay preview
+## Usage
+
+Use the open menu to choose individual chart files, ZIP / OSZ packs, or a chart folder.
+
+Some media formats depend on browser codec support. WMA, WMV, and ASF are detected as unsupported by most browsers and may not play unless the browser provides codecs for them.
+
+## Notes
+
+This is a viewer and autoplay preview tool, not a playable rhythm game client. Timing, chart parsing, media support, and visual skins are implemented for inspection and preview.
+
+## Licenses
+
+Project code is licensed under the MIT License. Third-party libraries and bundled noteskin assets keep their original licenses; see `THIRD_PARTY_NOTICES.md` and the license files in `vendor/` and `assets/noteskins/ddr-night/`.

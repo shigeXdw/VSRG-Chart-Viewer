@@ -6,12 +6,13 @@
   const LANE_ORDER = { "6": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "8": 6, "9": 7 };
   const AUDIO_EXTENSIONS = new Set([
     ".wav", ".wave", ".ogg", ".oga", ".opus", ".mp3", ".mp2",
-    ".m4a", ".aac", ".flac", ".aif", ".aiff", ".weba", ".caf"
+    ".m4a", ".aac", ".flac", ".aif", ".aiff", ".weba", ".caf", ".wma"
   ]);
   const VIDEO_EXTENSIONS = new Set([
     ".mp4", ".m4v", ".webm", ".ogv", ".ogg", ".mov", ".mpeg",
-    ".mpg", ".mpe", ".ts", ".m2ts"
+    ".mpg", ".mpe", ".ts", ".m2ts", ".wmv", ".asf"
   ]);
+  const BROWSER_UNSUPPORTED_MEDIA_EXTENSIONS = new Set([".wma", ".wmv", ".asf"]);
   const IMAGE_EXTENSIONS = new Set([".bmp", ".png", ".jpg", ".jpeg", ".gif", ".webp"]);
   const DIFFICULTIES = {
     1: ["BEGINNER", "#45dc67"],
@@ -20,10 +21,18 @@
     4: ["ANOTHER", "#ff4d59"],
     5: ["LEGGENDARIA", "#c77dff"]
   };
+  const IIDX_GREEN_NUMBER_BASE = 174000;
+  const JUDGE_LINE_WIDTH = 3;
+  const HIT_EFFECT_DURATION = 0.36;
+  const HIT_LIGHT_HEIGHT = 164;
+  const HIT_BOMB_SCALE = 2.35;
 
   const ui = {
-    openFile: $("openFileButton"),
-    openFolder: $("openFolderButton"),
+    openButton: $("openButton"),
+    openMenu: $("openMenu"),
+    openMenuPanel: $("openMenuPanel"),
+    openFilesOption: $("openFilesOption"),
+    openFolderOption: $("openFolderOption"),
     files: $("fileInput"),
     folder: $("folderInput"),
     select: $("chartSelect"),
@@ -37,6 +46,7 @@
     video: $("bga"),
     layerVideo: $("bgaLayerVideo"),
     bgaCanvas: $("bgaCanvas"),
+    bgaBackdropToggle: $("bgaBackdropToggle"),
     placeholder: $("moviePlaceholder"),
     title: $("title"),
     artist: $("artist"),
@@ -57,6 +67,17 @@
     scratchWidthValue: $("scratchWidthValue"),
     noteThickness: $("noteThickness"),
     noteThicknessValue: $("noteThicknessValue"),
+    bgaBlur: $("bgaBlur"),
+    bgaBlurValue: $("bgaBlurValue"),
+    bgaDarkness: $("bgaDarkness"),
+    bgaDarknessValue: $("bgaDarknessValue"),
+    laneDarkness: $("laneDarkness"),
+    laneDarknessValue: $("laneDarknessValue"),
+    stepmaniaScrollDirection: $("stepmaniaScrollDirection"),
+    stepmaniaColumnSpacing: $("stepmaniaColumnSpacing"),
+    stepmaniaColumnSpacingValue: $("stepmaniaColumnSpacingValue"),
+    sidePanelToggle: $("sidePanelToggle"),
+    playerNotesRadar: $("playerNotesRadar"),
     sudden: $("suddenButton"),
     suddenAmount: $("suddenAmount"),
     suddenAmountValue: $("suddenAmountValue"),
@@ -72,7 +93,6 @@
     hitEffects: $("hitEffects"),
     currentKps: $("currentKps"),
     peakKps: $("peakKps"),
-    density: $("density"),
     status: $("status"),
     playerView: $("playerView"),
     inspectorView: $("inspectorView"),
@@ -96,6 +116,10 @@
 
   const ctx = ui.canvas.getContext("2d", { alpha: false, desynchronized: true });
   const bgaCtx = ui.bgaCanvas.getContext("2d", { alpha: false });
+  const backdropCanvas = document.createElement("canvas");
+  const backdropCtx = backdropCanvas.getContext("2d", { alpha: false });
+  const backdropFrameCanvas = document.createElement("canvas");
+  const backdropFrameCtx = backdropFrameCanvas.getContext("2d", { alpha: false });
   const modButtons = [...document.querySelectorAll(".mod-button")];
   const viewButtons = [...document.querySelectorAll(".view-tab")];
 
@@ -142,8 +166,12 @@
     canvasHeight: 1,
     iidxHispeed: 2,
     fixedScrollSpeed: 720,
+    playbackRate: 1,
     palette: {},
     view: "player",
+    sidePanelCollapsed: false,
+    bgaBackdrop: false,
+    bgaBackdropLastUpdate: -Infinity,
     followedMeasure: -1
   };
 
@@ -942,13 +970,14 @@
     const chartFiles = [...state.files.values()].filter((file) => PlayerModes.find(file));
     for (const file of chartFiles) {
       try {
-        const chart = await PlayerModes.parse(file, {
+        const parsed = await PlayerModes.parse(file, {
           decodeText,
           parseBms: parseChart,
           parseBmson,
           parseOsu
         });
-        if (chart) state.charts.push(chart);
+        const charts = Array.isArray(parsed) ? parsed : [parsed];
+        for (const chart of charts) if (chart) state.charts.push(chart);
       } catch (error) {
         console.error(file.name, error);
       }
@@ -975,7 +1004,7 @@
 
   function chartSelectLabel(chart) {
     if (chart.mode?.selectLabel) return chart.mode.selectLabel(chart);
-    const title = chart.header.TITLE || chart.name.replace(/\.(bms|bme|bmson|osu|ugc)$/i, "");
+    const title = chart.header.TITLE || chart.name.replace(/\.(bms|bme|bmson|osu|ugc|sm|ssc)$/i, "");
     if (chart.format === "osu") {
       const rating = Number.isFinite(chart.stars) ? chart.stars.toFixed(2) : "--";
       const version = chart.header.OSU_VERSION || chart.name;
@@ -1005,12 +1034,12 @@
     state.files.set(normalizePath(parts.join("/")), file);
   }
 
-  async function addOszArchive(file) {
+  async function addZipArchive(file) {
     const archive = fflate.unzipSync(new Uint8Array(await file.arrayBuffer()));
     for (const [path, bytes] of Object.entries(archive)) {
       if (path.endsWith("/")) continue;
       const name = path.split("/").pop();
-      state.files.set(normalizePath(path), new File([bytes], name));
+      state.files.set(normalizePath(path), new File([bytes], name || path));
     }
   }
 
@@ -1020,7 +1049,7 @@
     for (const file of fileList) {
       ui.status.textContent = `Opening ${file.name}...`;
       try {
-        if (/\.osz$/i.test(file.name)) await addOszArchive(file);
+        if (/\.(osz|zip)$/i.test(file.name)) await addZipArchive(file);
         else addRegularFile(file);
       } catch (error) {
         console.error(file.name, error);
@@ -1045,15 +1074,23 @@
     const c = state.chart;
     ui.title.textContent = c.header.TITLE || c.name;
     ui.artist.textContent = chartArtistLabel(c);
-    ui.genre.textContent = c.header.GENRE || "BMS";
+    ui.genre.textContent = c.header.GENRE || "VSRG";
     ui.difficulty.textContent = c.header.PLAYLEVEL || "--";
+    ui.difficulty.classList.remove("osu-pill", "expert-plus");
+    ui.difficulty.style.removeProperty("--level-bg");
+    ui.difficulty.style.removeProperty("--star-text-color");
     if (c.mode?.difficultyStyle) {
       const levelStyle = c.mode.difficultyStyle(c);
       ui.difficulty.dataset.label = levelStyle[0] || "";
       ui.difficulty.style.setProperty("--level-color", levelStyle[1] || "#d5ff36");
     } else if (c.format === "osu") {
+      const expertPlus = Number(c.stars) >= 6.5;
       ui.difficulty.dataset.label = "";
-      ui.difficulty.style.setProperty("--level-color", osuStarColor(c.stars));
+      ui.difficulty.classList.add("osu-pill");
+      ui.difficulty.style.setProperty("--level-bg", osuStarColor(c.stars));
+      ui.difficulty.style.setProperty("--star-text-color", expertPlus ? "#ffe45c" : "#05080b");
+      ui.difficulty.style.setProperty("--level-color", expertPlus ? "#ffe45c" : "#05080b");
+      ui.difficulty.classList.toggle("expert-plus", expertPlus);
     } else {
       const difficulty = Number(c.header.DIFFICULTY) || difficultyFromName(c.name);
       const levelStyle = DIFFICULTIES[difficulty] || ["CHART", "#d5ff36"];
@@ -1063,7 +1100,7 @@
     ui.notes.textContent = String(c.noteCount);
     ui.base.textContent = String(c.base);
     updateTempoDisplay(0);
-    ui.time.textContent = `00:00 / ${formatTime(c.duration)}`;
+    ui.time.textContent = `00:00 / ${formatTime(playbackEndTime(c))}`;
     ui.seek.value = "0";
     const customField = Boolean(c.mode?.drawPlayfield);
     modButtons.forEach((button) => {
@@ -1074,11 +1111,20 @@
     ui.sudden.disabled = customField;
     ui.suddenAmount.disabled = customField || !state.suddenEnabled;
     ui.suddenAmountValue.disabled = customField || !state.suddenEnabled;
+    if (ui.stepmaniaScrollDirection) {
+      const stepmania = c.modeId === "stepmania";
+      ui.stepmaniaScrollDirection.disabled = !stepmania;
+      ui.stepmaniaScrollDirection.closest("label").hidden = !stepmania;
+      ui.stepmaniaColumnSpacing.disabled = !stepmania;
+      ui.stepmaniaColumnSpacing.closest("label").hidden = !stepmania;
+    }
     applyLaneMod();
     updateNoteCounter(0);
     updateLiveStats(0);
+    renderPlayerRadar();
     renderInspector();
     state.bgaPreloadPromise = preloadBgaAssets(c);
+    updateBgaBackdropAvailability(c);
     updateBga(0);
     draw(0);
   }
@@ -1114,12 +1160,16 @@
   }
 
   function osuStarColor(stars) {
-    const anchors = [
-      [0, "#4290fb"], [2, "#4fc0ff"], [2.7, "#4fffd5"], [3.3, "#7cff4f"],
-      [4, "#f6f05c"], [4.7, "#ff8068"], [5.3, "#ff4e6f"], [6, "#c645b8"],
-      [6.7, "#6563de"], [7.7, "#18158e"], [9, "#000000"]
-    ];
     const value = Number.isFinite(stars) ? stars : 0;
+
+    const anchors = [
+      [0, "#4aa8ff"], [1.99, "#4fc0ff"],
+      [2, "#4fffb0"], [2.69, "#a7ff4f"],
+      [2.7, "#f3f05a"], [3.99, "#ffe15c"],
+      [4, "#ff8370"], [5.29, "#ff627b"],
+      [5.3, "#d24bb2"], [6.49, "#ae63dc"],
+      [6.5, "#6764df"], [7.7, "#18158e"], [9, "#05050d"]
+    ];
     let lower = anchors[0], upper = anchors[anchors.length - 1];
     for (let index = 1; index < anchors.length; index++) {
       if (value <= anchors[index][0]) {
@@ -1137,7 +1187,39 @@
   }
 
   function playbackSpeed() {
-    return Number(ui.songSpeed.value) / 100;
+    return state.playbackRate;
+  }
+
+  function chartTimeNow(rate = playbackSpeed()) {
+    if (!state.chart) return 0;
+    if (!state.playing || !state.audio) return state.pausedAt;
+    const time = (state.audio.currentTime - state.startAt) * rate;
+    return Math.max(0, time);
+  }
+
+  function setPlaybackRate(percent) {
+    const previousRate = playbackSpeed();
+    const endTime = playbackEndTime();
+    const liveTime = state.chart
+      ? Math.min(endTime - 0.01, chartTimeNow(previousRate))
+      : chartTimeNow(previousRate);
+    const clamped = clamp(Number(percent), 50, 200);
+    state.playbackRate = clamped / 100;
+    ui.songSpeed.value = String(clamped);
+    ui.songSpeedValue.value = String(clamped);
+    if (state.playing && state.audio) {
+      state.startAt = state.audio.currentTime - liveTime / playbackSpeed();
+      state.pausedAt = liveTime;
+      state.lastTime = liveTime;
+      state.nextScheduleAt = Math.min(state.nextScheduleAt, liveTime);
+      updateBga(liveTime);
+      draw(liveTime);
+    }
+    updateTempoDisplay(liveTime);
+  }
+
+  function playbackEndTime(chart = state.chart) {
+    return Math.max(chart?.duration || 0, chart?.playbackEnd || 0);
   }
 
   function hiSpeed() {
@@ -1151,16 +1233,29 @@
   function greenNumber(time = state.pausedAt) {
     if (!state.chart) return 0;
     const effectiveBpm = bpmAt(time) * playbackSpeed();
-    return 240000 / (effectiveBpm * hiSpeed()) * visibleLaneFraction();
+    return IIDX_GREEN_NUMBER_BASE / (effectiveBpm * hiSpeed()) * visibleLaneFraction();
   }
 
   function updateTempoDisplay(time = state.pausedAt) {
     if (!state.chart) return;
     const effectiveBpm = bpmAt(time) * playbackSpeed();
-    ui.bpm.textContent = effectiveBpm.toFixed(effectiveBpm % 1 ? 1 : 0);
+    ui.bpm.textContent = formatBpm(effectiveBpm);
     if (ui.scrollMode.value === "iidx") {
       ui.scrollModeValue.value = String(Math.round(greenNumber(time)));
     }
+  }
+
+  function formatBpm(value) {
+    const bpm = Number(value);
+    if (!Number.isFinite(bpm)) return "--";
+    if (Math.abs(bpm - Math.round(bpm)) < 0.01) return String(Math.round(bpm));
+    return bpm.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  }
+
+  function unsupportedMediaHint(files) {
+    const blocked = [...files].filter((name) => BROWSER_UNSUPPORTED_MEDIA_EXTENSIONS.has(splitFilename(name.toLowerCase()).extension));
+    if (!blocked.length) return "";
+    return ` ${blocked.slice(0, 3).join(", ")} use Windows Media codecs, which this browser cannot decode directly. Convert them to WAV/OGG/MP3/WebM or add a transcoding step.`;
   }
 
   async function getAudioBuffer(object) {
@@ -1180,6 +1275,26 @@
       });
     state.buffers.set(object, promise);
     return promise;
+  }
+
+  async function updatePlaybackEnd() {
+    const chart = state.chart;
+    if (!chart || !state.audio) return;
+    const groups = ui.keysounds.checked
+      ? [chart.bgmEvents, chart.keyEvents]
+      : [chart.bgmEvents];
+    let end = chart.duration;
+    for (const event of groups.flat()) {
+      const buffer = await getAudioBuffer(event.object);
+      if (!buffer || state.chart !== chart) continue;
+      const offset = Math.max(0, Number(event.audioOffset) || 0);
+      const remaining = Math.max(0, buffer.duration - offset);
+      const duration = Number(event.audioDuration) > 0
+        ? Math.min(Number(event.audioDuration), remaining || Number(event.audioDuration))
+        : remaining;
+      end = Math.max(end, event.time + duration);
+    }
+    chart.playbackEnd = end;
   }
 
   async function getPlaybackBuffer(object) {
@@ -1264,10 +1379,11 @@
     if (state.missingAudio.size) {
       ui.status.textContent = `Missing audio: ${[...state.missingAudio].join(", ")}. Open the chart together with its media files or select its folder.`;
     } else if (state.failedAudio.size) {
-      ui.status.textContent = `${state.failedAudio.size} audio file(s) could not be decoded by this browser.`;
+      ui.status.textContent = `${state.failedAudio.size} audio file(s) could not be decoded by this browser.${unsupportedMediaHint(state.failedAudio)}`;
     } else {
       ui.status.textContent = `${needed.length} audio files loaded. Starting playback.`;
     }
+    await updatePlaybackEnd();
     return true;
   }
 
@@ -1355,6 +1471,7 @@
     const generation = ++state.playGeneration;
     const ready = await preloadAudio(generation);
     if (!ready || generation !== state.playGeneration) return;
+    ui.time.textContent = `${formatTime(state.pausedAt)} / ${formatTime(playbackEndTime())}`;
     state.sources = [];
     state.scheduled.clear();
     state.hitNotes.clear();
@@ -1375,7 +1492,7 @@
     ui.status.textContent = state.missingAudio.size
       ? `Playback running with missing audio: ${[...state.missingAudio].join(", ")}.`
       : state.failedAudio.size
-        ? `Playback running with ${state.failedAudio.size} unsupported audio file(s).`
+        ? `Playback running with ${state.failedAudio.size} unsupported audio file(s).${unsupportedMediaHint(state.failedAudio)}`
       : "Playback running.";
     tick();
   }
@@ -1423,8 +1540,9 @@
 
   function tick(frameTime = 0) {
     if (!state.playing) return;
-    const time = (state.audio.currentTime - state.startAt) * playbackSpeed();
-    if (time >= state.chart.duration) { stop(); return; }
+    const time = chartTimeNow();
+    const endTime = playbackEndTime();
+    if (time >= endTime) { stop(); return; }
     state.pausedAt = time;
     if (time >= state.nextScheduleAt) {
       scheduleAudioWindow(time, time + 4);
@@ -1433,15 +1551,15 @@
     registerHits(state.lastTime, time);
     state.lastTime = time;
     updateBga(time);
-    draw(time);
+    draw(time, frameTime);
     if (frameTime - state.lastUiUpdate >= 100) {
       updateNoteCounter(time);
       updateLiveStats(time);
       updateLaneArrangement(time);
       updateTempoDisplay(time);
       updateInspectorCurrent();
-      ui.time.textContent = `${formatTime(time)} / ${formatTime(state.chart.duration)}`;
-      if (!state.seeking) ui.seek.value = String(Math.round(time / state.chart.duration * 1000));
+      ui.time.textContent = `${formatTime(time)} / ${formatTime(endTime)}`;
+      if (!state.seeking) ui.seek.value = String(Math.round(time / endTime * 1000));
       state.lastUiUpdate = frameTime;
     }
     state.frame = requestAnimationFrame(tick);
@@ -1450,7 +1568,7 @@
   function handleVisibilityChange() {
     if (!state.playing || !state.chart) return;
 
-    const time = (state.audio.currentTime - state.startAt) * playbackSpeed();
+    const time = chartTimeNow();
     if (document.hidden) {
       // Background tabs throttle animation frames, so queue the remaining
       // keysounds while the page still has an active AudioContext.
@@ -1468,6 +1586,17 @@
     updateBgaSlot("base", state.chart.bgaEvents, time);
     updateBgaSlot("layer", state.chart.layerEvents || [], time);
     renderBgaFrame();
+  }
+
+  function chartHasBga(chart) {
+    return Boolean(chart && [...(chart.bgaEvents || []), ...(chart.layerEvents || [])].some((event) => chart.bmp.get(event.object)));
+  }
+
+  function updateBgaBackdropAvailability(chart = state.chart) {
+    const available = chartHasBga(chart);
+    ui.bgaBackdropToggle.hidden = !available;
+    ui.bgaBackdropToggle.disabled = !available;
+    if (!available && state.bgaBackdrop) setBgaBackdrop(false);
   }
 
   function updateBgaSlot(slotName, events, time) {
@@ -1497,9 +1626,11 @@
       const slot = { ...asset, path, eventTime: event.time };
       if (slotName === "base") state.bgaBase = slot;
       else state.bgaLayer = slot;
+      state.bgaBackdropLastUpdate = -Infinity;
       if (slot.kind === "video") {
         const media = slotName === "base" ? ui.video : ui.layerVideo;
         slot.media = media;
+        media.dataset.sourcePath = path;
         media.src = slot.url;
         media.playbackRate = playbackSpeed();
         media.preservesPitch = !ui.pitchWithSpeed.checked;
@@ -1569,17 +1700,17 @@
     if (state.playing && slot.media.paused) slot.media.play().catch(() => {});
   }
 
-  function drawBgaSource(source) {
+  function drawBgaSource(context, width, height, source, fit = "contain") {
     if (!source) return;
-    const width = ui.bgaCanvas.width;
-    const height = ui.bgaCanvas.height;
     const sourceWidth = source.videoWidth || source.width;
     const sourceHeight = source.videoHeight || source.height;
     if (!sourceWidth || !sourceHeight) return;
-    const scale = Math.min(width / sourceWidth, height / sourceHeight);
+    const scale = fit === "cover"
+      ? Math.max(width / sourceWidth, height / sourceHeight)
+      : Math.min(width / sourceWidth, height / sourceHeight);
     const targetWidth = sourceWidth * scale;
     const targetHeight = sourceHeight * scale;
-    bgaCtx.drawImage(source, (width - targetWidth) / 2, (height - targetHeight) / 2, targetWidth, targetHeight);
+    context.drawImage(source, (width - targetWidth) / 2, (height - targetHeight) / 2, targetWidth, targetHeight);
   }
 
   function renderBgaFrame() {
@@ -1596,14 +1727,53 @@
     bgaCtx.fillRect(0, 0, width, height);
     const baseSource = state.bgaBase?.kind === "video" ? state.bgaBase.media : state.bgaBase?.source;
     const layerSource = state.bgaLayer?.kind === "video" ? state.bgaLayer.media : state.bgaLayer?.source;
-    drawBgaSource(baseSource);
-    drawBgaSource(layerSource);
+    drawBgaSource(bgaCtx, width, height, baseSource);
+    drawBgaSource(bgaCtx, width, height, layerSource);
     ui.placeholder.style.display = baseSource || layerSource ? "none" : "grid";
+  }
+
+  function drawPlayfieldBgaBackdrop(width, height, frameTime = performance.now()) {
+    const baseSource = state.bgaBase?.kind === "video" ? state.bgaBase.media : state.bgaBase?.source;
+    const layerSource = state.bgaLayer?.kind === "video" ? state.bgaLayer.media : state.bgaLayer?.source;
+    if (!state.bgaBackdrop || (!baseSource && !layerSource)) return false;
+    const scale = 0.25;
+    const lowWidth = Math.max(160, Math.round(width * scale));
+    const lowHeight = Math.max(120, Math.round(height * scale));
+    const resized = backdropFrameCanvas.width !== Math.round(width) || backdropFrameCanvas.height !== Math.round(height);
+    const shouldRefresh = resized || frameTime - state.bgaBackdropLastUpdate >= 66;
+    if (shouldRefresh && (backdropCanvas.width !== lowWidth || backdropCanvas.height !== lowHeight)) {
+      backdropCanvas.width = lowWidth;
+      backdropCanvas.height = lowHeight;
+    }
+    if (shouldRefresh) {
+      if (resized) {
+        backdropFrameCanvas.width = Math.round(width);
+        backdropFrameCanvas.height = Math.round(height);
+      }
+      backdropCtx.clearRect(0, 0, lowWidth, lowHeight);
+      backdropCtx.fillStyle = "#000";
+      backdropCtx.fillRect(0, 0, lowWidth, lowHeight);
+      const blur = Number(ui.bgaBlur.value) || 0;
+      backdropCtx.filter = blur > 0 ? `blur(${blur}px) saturate(1.08)` : "saturate(1.08)";
+      drawBgaSource(backdropCtx, lowWidth, lowHeight, baseSource, "cover");
+      drawBgaSource(backdropCtx, lowWidth, lowHeight, layerSource, "cover");
+      backdropCtx.filter = "none";
+      backdropFrameCtx.imageSmoothingEnabled = true;
+      backdropFrameCtx.drawImage(backdropCanvas, 0, 0, width, height);
+      const darkness = Math.max(0, Math.min(0.95, Number(ui.bgaDarkness.value) / 100));
+      backdropFrameCtx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
+      backdropFrameCtx.fillRect(0, 0, width, height);
+      state.bgaBackdropLastUpdate = frameTime;
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(backdropFrameCanvas, 0, 0, width, height);
+    return true;
   }
 
   async function seekTo(time) {
     if (!state.chart) return;
-    const target = Math.max(0, Math.min(state.chart.duration - 0.01, time));
+    const endTime = playbackEndTime();
+    const target = Math.max(0, Math.min(endTime - 0.01, time));
     const resume = state.playing;
     state.playGeneration += 1;
     stopAudioSources();
@@ -1616,8 +1786,8 @@
     updateLiveStats(target);
     updateLaneArrangement(target);
     updateInspectorCurrent();
-    ui.time.textContent = `${formatTime(target)} / ${formatTime(state.chart.duration)}`;
-    ui.seek.value = String(Math.round(target / state.chart.duration * 1000));
+    ui.time.textContent = `${formatTime(target)} / ${formatTime(endTime)}`;
+    ui.seek.value = String(Math.round(target / endTime * 1000));
     ui.video.pause();
     ui.layerVideo.pause();
     state.bgaBase = null;
@@ -1629,6 +1799,7 @@
 
   function laneFor(note, lanes) {
     if (typeof note !== "string" && Number.isInteger(note.lane)) return note.modLane ?? note.lane;
+    if (typeof note !== "string" && Number.isInteger(note.stepLane)) return note.stepLane;
     const channel = typeof note === "string" ? note : note.channel;
     const side = Number(channel[0]);
     const key = typeof note === "string" ? channel[1] : (note.modKey || channel[1]);
@@ -1660,6 +1831,174 @@
     return localLane % 2 === 1;
   }
 
+  function drawLaneLightBar(column, effect, hitY, life) {
+    const x = column.x;
+    const width = Math.max(2, column.width);
+    const color = effect.color || "#65d8ff";
+    const beamHeight = Math.min(hitY, HIT_LIGHT_HEIGHT);
+    const beamTop = hitY - beamHeight;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const columnFill = ctx.createLinearGradient(0, beamTop, 0, hitY);
+    columnFill.addColorStop(0, color + "00");
+    columnFill.addColorStop(0.2, color + "16");
+    columnFill.addColorStop(0.52, color + "50");
+    columnFill.addColorStop(0.78, color + "aa");
+    columnFill.addColorStop(1, "#ffffff");
+    ctx.globalAlpha = life * 0.66;
+    ctx.fillStyle = columnFill;
+    ctx.fillRect(x, beamTop, width, beamHeight);
+    ctx.restore();
+  }
+
+  function drawBombEffect(column, effect, hitY, age, life, baseLaneWidth) {
+    const center = column.x + column.width / 2;
+    const laneX = column.x;
+    const laneWidth = column.width;
+    const progress = Math.max(0, Math.min(1, age / HIT_EFFECT_DURATION));
+    const color = effect.color || "#65d8ff";
+    const bombSize = Math.max(72, Math.min(132, baseLaneWidth * HIT_BOMB_SCALE));
+    const radius = bombSize * (0.32 + progress * 0.55);
+    const burstWidth = bombSize * (1.12 + progress * 0.44);
+    const burstHeight = bombSize * (0.72 - progress * 0.12);
+    const coreY = hitY;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = life;
+
+    const horizontal = ctx.createRadialGradient(center, coreY, 0, center, coreY, burstWidth * 0.58);
+    horizontal.addColorStop(0, "#ffffff");
+    horizontal.addColorStop(0.16, color);
+    horizontal.addColorStop(0.42, color + "88");
+    horizontal.addColorStop(1, color + "00");
+    ctx.save();
+    ctx.translate(center, coreY);
+    ctx.scale(1.65, 0.42);
+    ctx.fillStyle = horizontal;
+    ctx.beginPath();
+    ctx.arc(0, 0, burstWidth * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    const vertical = ctx.createLinearGradient(0, coreY - burstHeight, 0, hitY + 8);
+    vertical.addColorStop(0, color + "00");
+    vertical.addColorStop(0.45, color + "77");
+    vertical.addColorStop(0.78, "#ffffff");
+    vertical.addColorStop(1, color + "66");
+    ctx.globalAlpha = life * 0.82;
+    ctx.fillStyle = vertical;
+    ctx.fillRect(laneX, coreY - burstHeight, laneWidth, burstHeight + 12);
+
+    const core = ctx.createRadialGradient(center, coreY, 0, center, coreY, radius);
+    core.addColorStop(0, "#ffffff");
+    core.addColorStop(0.28, color);
+    core.addColorStop(0.66, color + "55");
+    core.addColorStop(1, color + "00");
+    ctx.globalAlpha = life;
+    ctx.fillStyle = core;
+    ctx.save();
+    ctx.translate(center, coreY);
+    ctx.scale(Math.max(1, laneWidth / Math.max(1, radius * 1.15)), 0.78);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.globalAlpha = life * (1 - progress) * 0.55;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(center, coreY, radius * (0.78 + progress * 0.5), 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = life * 0.6;
+    ctx.strokeStyle = color + "aa";
+    ctx.lineWidth = 2;
+    for (let ray = 0; ray < 8; ray++) {
+      const angle = -Math.PI / 2 + ray * Math.PI / 4 + progress * 0.18;
+      const inner = radius * 0.45;
+      const outer = radius * (1.25 + progress * 0.85) * (ray % 2 ? 0.78 : 1);
+      ctx.beginPath();
+      ctx.moveTo(center + Math.cos(angle) * inner, coreY + Math.sin(angle) * inner);
+      ctx.lineTo(center + Math.cos(angle) * outer, coreY + Math.sin(angle) * outer);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawHoldLaneEffect(column, color, hitY, time, startTime, baseLaneWidth) {
+    const age = Math.max(0, time - startTime);
+    const pulse = 0.86 + Math.sin(age * 12) * 0.14;
+    const center = column.x + column.width / 2;
+    const coreY = hitY;
+    const bombSize = Math.max(72, Math.min(132, baseLaneWidth * HIT_BOMB_SCALE));
+    const radius = bombSize * (0.33 + pulse * 0.05);
+    const rotation = age * 4.6;
+    const beamHeight = Math.min(hitY, HIT_LIGHT_HEIGHT * 0.86);
+    const beamTop = hitY - beamHeight;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const glow = ctx.createLinearGradient(0, beamTop, 0, hitY);
+    glow.addColorStop(0, color + "00");
+    glow.addColorStop(0.36, color + "14");
+    glow.addColorStop(0.75, color + "62");
+    glow.addColorStop(1, "#ffffff");
+    ctx.globalAlpha = 0.28 * pulse;
+    ctx.fillStyle = glow;
+    ctx.fillRect(column.x, beamTop, column.width, beamHeight);
+
+    const halo = ctx.createRadialGradient(center, coreY, 0, center, coreY, radius * 1.65);
+    halo.addColorStop(0, "#ffffff");
+    halo.addColorStop(0.22, color);
+    halo.addColorStop(0.62, color + "66");
+    halo.addColorStop(1, color + "00");
+    ctx.globalAlpha = 0.58 * pulse;
+    ctx.fillStyle = halo;
+    ctx.save();
+    ctx.translate(center, coreY);
+    ctx.scale(Math.max(1, column.width / Math.max(1, radius * 1.08)), 0.72);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    const core = ctx.createRadialGradient(center, coreY, 0, center, coreY, radius * 0.62);
+    core.addColorStop(0, "#ffffff");
+    core.addColorStop(0.34, color);
+    core.addColorStop(1, color + "00");
+    ctx.globalAlpha = 0.72 * pulse;
+    ctx.fillStyle = core;
+    ctx.fillRect(column.x, coreY - radius * 0.42, column.width, radius * 0.72);
+
+    ctx.globalAlpha = 0.42 * pulse;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(center, coreY, radius * (0.82 + Math.sin(age * 9) * 0.06), 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.52 * pulse;
+    ctx.strokeStyle = color + "b8";
+    ctx.lineWidth = 2;
+    for (let ray = 0; ray < 8; ray++) {
+      const angle = rotation + ray * Math.PI / 4;
+      const inner = radius * 0.48;
+      const outer = radius * (1.38 + (ray % 2) * 0.22);
+      ctx.beginPath();
+      ctx.moveTo(center + Math.cos(angle) * inner, coreY + Math.sin(angle) * inner);
+      ctx.lineTo(center + Math.cos(angle) * outer, coreY + Math.sin(angle) * outer);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function hitEffectColor(note, lane, chart) {
+    const scratch = chart.hasScratch !== false && (lane === 0 || (chart.lanes === 16 && lane === 15));
+    if (scratch) return "#ffcf55";
+    return isWhiteKeyLane(lane, chart.lanes, chart.hasScratch !== false) ? "#dcecff" : "#6f8cff";
+  }
+
   function registerHits(previous, time) {
     if (!state.chart) return;
     const notes = state.chart.hitNotes;
@@ -1670,10 +2009,11 @@
       if (state.hitNotes.has(note)) continue;
       state.hitNotes.add(note);
       if (ui.hitEffects.checked) {
+        const lane = laneFor(note, state.chart.lanes);
         state.effects.push({
-          lane: laneFor(note, state.chart.lanes),
+          lane,
           started: time,
-          color: note.channel[1] === "6" ? "#ffbf2f" : "#65d8ff"
+          color: hitEffectColor(note, lane, state.chart)
         });
       }
     }
@@ -1695,7 +2035,7 @@
     if (!state.chart) {
       ui.currentKps.textContent = "0.0";
       ui.peakKps.textContent = "0.0";
-      ui.density.textContent = "0";
+      renderPlayerRadar();
       return;
     }
 
@@ -1713,7 +2053,6 @@
 
     ui.currentKps.textContent = currentKps.toFixed(1);
     ui.peakKps.textContent = state.peakKps.toFixed(1);
-    ui.density.textContent = density.toFixed(1);
   }
 
   function switchView(view) {
@@ -1731,6 +2070,41 @@
       draw(state.pausedAt);
       renderBgaFrame();
     }
+  }
+
+  function setSidePanelCollapsed(collapsed) {
+    state.sidePanelCollapsed = collapsed;
+    ui.playerView.classList.toggle("side-collapsed", collapsed);
+    ui.sidePanelToggle.setAttribute("aria-expanded", String(!collapsed));
+    ui.sidePanelToggle.textContent = collapsed ? "Stats" : "Hide";
+    ui.sidePanelToggle.title = collapsed ? "Show KPS and notes radar" : "Hide KPS and notes radar";
+    requestAnimationFrame(() => {
+      syncCanvasSize();
+      draw(state.pausedAt);
+      renderPlayerRadar();
+    });
+  }
+
+  function setBgaBackdrop(enabled) {
+    if (enabled && !chartHasBga(state.chart)) return;
+    state.bgaBackdrop = enabled;
+    state.bgaBackdropLastUpdate = -Infinity;
+    ui.playerView.classList.toggle("bga-backdrop", enabled);
+    ui.bgaBackdropToggle.classList.toggle("active", enabled);
+    ui.bgaBackdropToggle.setAttribute("aria-pressed", String(enabled));
+    ui.bgaBackdropToggle.title = enabled
+      ? "Show BGA in side panel"
+      : "Show BGA behind playfield";
+    renderBgaFrame();
+    requestAnimationFrame(() => {
+      syncCanvasSize();
+      draw(state.pausedAt);
+    });
+  }
+
+  function invalidateBgaBackdrop() {
+    state.bgaBackdropLastUpdate = -Infinity;
+    draw(state.pausedAt);
   }
 
   function chartAnalysis(chart) {
@@ -1809,7 +2183,7 @@
       : `${analysis.minBpm}-${analysis.maxBpm}`;
     renderLaneDistribution(analysis.laneCounts);
     renderDensityGraph(chart);
-    renderNotesRadar(analysis.radar);
+    renderNotesRadar(ui.notesRadar, analysis.radar);
     renderMeasureGrid(chart);
   }
 
@@ -1850,26 +2224,124 @@
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     const width = cssWidth;
     const height = cssHeight;
-    const bins = Math.max(24, Math.ceil(chart.duration / 2));
+    const duration = Math.max(0.001, chart.duration || 0);
+    const plotLeft = 28;
+    const plotRight = width - 10;
+    const plotTop = 8;
+    const plotBottom = height - 20;
+    const plotWidth = Math.max(1, plotRight - plotLeft);
+    const plotHeight = Math.max(1, plotBottom - plotTop);
+    const bins = Math.min(
+      Math.max(72, Math.ceil(duration / 0.9)),
+      Math.max(72, Math.floor(plotWidth / 3.2))
+    );
     const values = Array(bins).fill(0);
+    const scratchValues = Array(bins).fill(0);
     for (const note of chart.hitNotes) {
-      const index = Math.min(bins - 1, Math.floor(note.time / chart.duration * bins));
+      const index = Math.min(bins - 1, Math.floor(note.time / duration * bins));
       values[index]++;
+      const lane = laneFor(note, chart.lanes);
+      if (chart.hasScratch !== false && (lane === 0 || (chart.lanes === 16 && lane === 15))) scratchValues[index]++;
     }
     const maximum = Math.max(1, ...values);
+    const sortedValues = values.filter((value) => value > 0).sort((a, b) => a - b);
+    const middle = sortedValues.length / 2;
+    const medianDensity = !sortedValues.length ? 0 : sortedValues.length % 2
+      ? sortedValues[Math.floor(middle)]
+      : (sortedValues[middle - 1] + sortedValues[middle]) / 2;
     context.clearRect(0, 0, width, height);
-    context.fillStyle = "#0d1014";
+    context.fillStyle = "#101010";
     context.fillRect(0, 0, width, height);
-    context.strokeStyle = "#65d8ff";
+    context.strokeStyle = "#343a40";
+    context.lineWidth = 1;
+    for (let line = 0; line <= 4; line++) {
+      const y = plotBottom - line / 4 * plotHeight;
+      context.beginPath();
+      context.moveTo(plotLeft, y);
+      context.lineTo(plotRight, y);
+      context.stroke();
+    }
+    for (let division = 0; division <= 10; division++) {
+      const x = plotLeft + division / 10 * plotWidth;
+      context.beginPath();
+      context.moveTo(x, plotTop);
+      context.lineTo(x, plotBottom);
+      context.stroke();
+    }
+    const barWidth = Math.max(2, plotWidth / bins - 0.6);
+    values.forEach((value, index) => {
+      const x = plotLeft + index / bins * plotWidth;
+      const barHeight = value / maximum * plotHeight;
+      context.fillStyle = "rgba(150, 155, 154, .72)";
+      context.fillRect(x, plotBottom - barHeight, barWidth, barHeight);
+      if (scratchValues[index]) {
+        const scratchHeight = scratchValues[index] / maximum * plotHeight;
+        context.fillStyle = "rgba(255, 82, 101, .9)";
+        context.fillRect(x, plotBottom - scratchHeight, barWidth, scratchHeight);
+      }
+    });
+    const medianY = plotBottom - medianDensity / maximum * plotHeight;
+    context.strokeStyle = "rgba(255, 255, 255, .55)";
+    context.setLineDash([4, 4]);
+    context.beginPath();
+    context.moveTo(plotLeft, medianY);
+    context.lineTo(plotRight, medianY);
+    context.stroke();
+    context.setLineDash([]);
+    const bpmSteps = chart.bpmChanges
+      .filter((change) => Number.isFinite(change.time) && Number.isFinite(change.bpm))
+      .map((change) => ({ time: Math.max(0, Math.min(duration, change.time)), bpm: change.bpm * playbackSpeed() }))
+      .sort((a, b) => a.time - b.time);
+    if (!bpmSteps.length || bpmSteps[0].time > 0.001) bpmSteps.unshift({ time: 0, bpm: bpmAt(0) * playbackSpeed() });
+    const bpmValues = bpmSteps.map((change) => change.bpm);
+    const minimumBpm = Math.min(...bpmValues);
+    const maximumBpm = Math.max(...bpmValues);
+    const bpmToY = (bpm) => {
+      if (Math.abs(maximumBpm - minimumBpm) < 0.001) return plotBottom - plotHeight * 0.72;
+      const ratio = (bpm - minimumBpm) / (maximumBpm - minimumBpm);
+      return plotBottom - (0.2 + ratio * 0.68) * plotHeight;
+    };
+    const timeToX = (time) => plotLeft + Math.max(0, Math.min(1, time / duration)) * plotWidth;
+    context.strokeStyle = "#00f030";
     context.lineWidth = 2;
     context.beginPath();
-    values.forEach((value, index) => {
-      const x = index / Math.max(1, bins - 1) * width;
-      const y = height - 8 - value / maximum * (height - 18);
-      if (index === 0) context.moveTo(x, y);
-      else context.lineTo(x, y);
+    bpmSteps.forEach((change, index) => {
+      const x = timeToX(change.time);
+      const y = bpmToY(change.bpm);
+      if (index === 0) context.moveTo(plotLeft, y);
+      else {
+        const previous = bpmSteps[index - 1];
+        context.lineTo(x, bpmToY(previous.bpm));
+        context.lineTo(x, y);
+      }
+      const nextX = timeToX(bpmSteps[index + 1]?.time ?? duration);
+      context.lineTo(nextX, y);
     });
     context.stroke();
+    context.font = "700 9px ui-monospace, SFMono-Regular, Consolas, monospace";
+    context.textBaseline = "middle";
+    context.textAlign = "left";
+    context.fillStyle = "#00f030";
+    const labelBuckets = new Set();
+    for (const change of bpmSteps) {
+      const x = timeToX(change.time);
+      const y = bpmToY(change.bpm);
+      if (x < plotLeft + 2 || x > plotRight - 16) continue;
+      const bucket = `${Math.round(x / 8)}:${formatBpm(change.bpm)}`;
+      if (labelBuckets.has(bucket)) continue;
+      labelBuckets.add(bucket);
+      context.fillText(formatBpm(change.bpm), x + 2, Math.max(plotTop + 6, y - 7));
+    }
+    context.fillStyle = "rgba(255, 255, 255, .72)";
+    context.fillText(medianDensity.toFixed(medianDensity % 1 ? 1 : 0), plotLeft + 3, medianY - 7);
+    context.fillStyle = "#7d8790";
+    context.textAlign = "right";
+    context.fillText(String(maximum), plotLeft - 5, plotTop + 2);
+    context.fillText("0", plotLeft - 5, plotBottom);
+    context.textAlign = "left";
+    context.fillText(formatTime(0), 0, height - 8);
+    context.textAlign = "right";
+    context.fillText(formatTime(duration), width - 1, height - 8);
     drawDensityProgress(state.pausedAt);
   }
 
@@ -1881,27 +2353,36 @@
     const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
     const width = Math.max(1, Math.round(canvas.clientWidth));
     const height = Math.max(1, Math.round(canvas.clientHeight));
-    const x = Math.max(1, Math.min(width - 1, time / Math.max(0.001, chart.duration) * width));
+    const plotLeft = 28;
+    const plotRight = width - 10;
+    const plotTop = 8;
+    const plotBottom = height - 20;
+    const x = Math.max(plotLeft, Math.min(plotRight, plotLeft + time / Math.max(0.001, chart.duration) * (plotRight - plotLeft)));
     context.save();
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     context.strokeStyle = currentDifficultyStyle()[1];
     context.lineWidth = 2;
     context.beginPath();
-    context.moveTo(x, 0);
-    context.lineTo(x, height);
+    context.moveTo(x, plotTop);
+    context.lineTo(x, plotBottom);
     context.stroke();
     context.fillStyle = currentDifficultyStyle()[1];
     context.beginPath();
-    context.moveTo(x - 4, 0);
-    context.lineTo(x + 4, 0);
-    context.lineTo(x, 6);
+    context.moveTo(x - 4, plotTop);
+    context.lineTo(x + 4, plotTop);
+    context.lineTo(x, plotTop + 6);
     context.closePath();
     context.fill();
     context.restore();
   }
 
-  function renderNotesRadar(values) {
-    const canvas = ui.notesRadar;
+  function renderPlayerRadar() {
+    const chart = state.chart;
+    const values = chart ? chartAnalysis(chart).radar : [0, 0, 0, 0, 0, 0];
+    renderNotesRadar(ui.playerNotesRadar, values, { compact: true });
+  }
+
+  function renderNotesRadar(canvas, values, options = {}) {
     const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
     const cssWidth = Math.max(1, Math.round(canvas.clientWidth));
     const cssHeight = Math.max(1, Math.round(canvas.clientHeight));
@@ -1917,7 +2398,8 @@
     const height = cssHeight;
     const centerX = width / 2;
     const centerY = height / 2 + 2;
-    const maximumRadius = Math.min(width * 0.4, height * 0.4);
+    const compact = Boolean(options.compact);
+    const maximumRadius = Math.min(width * (compact ? 0.31 : 0.4), height * (compact ? 0.33 : 0.4));
     const radius100 = maximumRadius * 0.68;
     const labels = ["NOTES", "PEAK", "SCRATCH", "SOF-LAN", "CHARGE", "CHORD"];
     const colors = ["#f064cf", "#f6d64a", "#ff7c58", "#6d7cff", "#49d8df", "#b7e65c"];
@@ -1971,28 +2453,34 @@
     context.lineWidth = 2;
     context.stroke();
 
-    context.font = "700 12px Segoe UI, Arial, sans-serif";
     context.textAlign = "center";
     context.textBaseline = "middle";
     labels.forEach((label, axis) => {
       const angle = -Math.PI / 2 + axis * Math.PI / 3;
-      const labelRadius = maximumRadius + 10;
-      const measured = context.measureText(label);
-      const halfWidth = measured.width / 2;
+      const value = Math.round(values[axis] || 0);
+      const labelRadius = maximumRadius + (compact ? 17 : 23);
+      context.font = `500 ${compact ? 8 : 12}px Segoe UI, Arial, sans-serif`;
+      const labelWidth = context.measureText(label).width;
+      context.font = `500 ${compact ? 8 : 12}px Segoe UI, Arial, sans-serif`;
+      const valueText = String(value);
+      const valueWidth = context.measureText(valueText).width;
+      const halfWidth = Math.max(labelWidth, valueWidth) / 2;
       const x = Math.max(
         halfWidth + 4,
         Math.min(width - halfWidth - 4, centerX + Math.cos(angle) * labelRadius)
       );
       const y = Math.max(
-        10,
-        Math.min(height - 10, centerY + Math.sin(angle) * labelRadius)
+        compact ? 12 : 17,
+        Math.min(height - (compact ? 14 : 19), centerY + Math.sin(angle) * labelRadius)
       );
-      context.fillStyle = colors[axis];
+      context.fillStyle = "#aab3ba";
       context.fillText(label, x, y);
+      context.fillStyle = "#f2f5f7";
+      context.fillText(valueText, x, y + (compact ? 9 : 13));
     });
 
     const [scaleX, scaleY] = point(0, 100);
-    context.font = "600 9px Segoe UI, Arial, sans-serif";
+    context.font = `600 ${compact ? 7 : 9}px Segoe UI, Arial, sans-serif`;
     context.fillStyle = "#b9cdd8";
     context.fillText("100", scaleX + 12, scaleY + 3);
   }
@@ -2079,12 +2567,19 @@
     const bpmEvents = chart.bpmChanges.filter((event) => event.beat >= startBeat && event.beat < endBeat);
     for (const event of bpmEvents) {
       const y = beatY(event.beat);
-      context.strokeStyle = "#ff5265";
-      context.lineWidth = 3;
+      context.strokeStyle = "#00f030";
+      context.lineWidth = 2;
       context.beginPath();
       context.moveTo(0, y);
       context.lineTo(width, y);
       context.stroke();
+      context.fillStyle = "#00f030";
+      context.font = "700 12px ui-monospace, SFMono-Regular, Consolas, monospace";
+      context.textAlign = "left";
+      context.textBaseline = "middle";
+      context.fillText(formatBpm(event.bpm), Math.min(width - 32, width - laneWidth * 0.78), y - 9);
+      context.font = "700 8px ui-monospace, SFMono-Regular, Consolas, monospace";
+      context.fillText("BPM", Math.min(width - 32, width - laneWidth * 0.78), y + 7);
     }
     for (const note of notes) {
       const lane = laneFor(note, chart.lanes);
@@ -2163,19 +2658,99 @@
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   }
 
-  function draw(time) {
+  function drawLaneReadout(chart, time, playLeft, playRight, judgeY, width, height) {
+    if (!chart) return;
+    const effectiveBpm = bpmAt(time) * playbackSpeed();
+    const readoutWidth = ui.scrollMode.value === "iidx" ? 112 : 92;
+    const readoutHeight = ui.scrollMode.value === "iidx" ? 82 : 54;
+    const gap = 16;
+    const hasRightRoom = playRight + gap + readoutWidth <= width - 8;
+    const hasLeftRoom = playLeft - gap - readoutWidth >= 8;
+    if (!hasRightRoom && !hasLeftRoom) return;
+    const readoutX = hasRightRoom
+      ? playRight + gap
+      : playLeft - gap - readoutWidth;
+    const readoutY = Math.max(16, Math.min(height - readoutHeight - 16, judgeY - readoutHeight - 20));
+    const rows = ui.scrollMode.value === "iidx"
+      ? [
+          ["HS", hiSpeed().toFixed(2), "#61dfff"],
+          ["GN", String(Math.round(greenNumber(time))), "#88ff63"],
+          ["BPM", formatBpm(effectiveBpm), "#ff4054"]
+        ]
+      : [
+          ["PX/S", String(Math.round(Number(ui.speed.value))), "#61dfff"],
+          ["BPM", formatBpm(effectiveBpm), "#ff4054"]
+        ];
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, .92)";
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
+    rows.forEach(([label, value, color], index) => {
+      const rowY = readoutY + 12 + index * 29;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "left";
+      ctx.font = "900 11px ui-monospace, SFMono-Regular, Consolas, monospace";
+      ctx.fillStyle = color;
+      ctx.fillText(label, readoutX, rowY + 2);
+      ctx.textAlign = "right";
+      ctx.font = "900 23px ui-monospace, SFMono-Regular, Consolas, monospace";
+      ctx.fillText(value, readoutX + readoutWidth, rowY);
+    });
+    ctx.restore();
+  }
+
+  function drawBpmChangeMarkers(chart, currentBeat, lastBeat, noteDistance, playLeft, playRight, hitY, height, width) {
+    if (!chart?.bpmChanges?.length) return;
+    const labelOutsideX = Math.min(width - 52, playRight + 10);
+    const labelInsideX = playRight - 62;
+    const canDrawOutside = labelOutsideX + 48 < width;
+    ctx.save();
+    ctx.font = "800 20px ui-monospace, SFMono-Regular, Consolas, monospace";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    for (const change of chart.bpmChanges) {
+      if (change.beat <= currentBeat + 0.001 || change.beat > lastBeat) continue;
+      const distance = noteDistance(change);
+      if (distance < 0 || distance > height) continue;
+      const y = hitY - distance;
+      if (y < 14 || y > height - 12) continue;
+      ctx.strokeStyle = "rgba(0, 240, 48, .82)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(playLeft, y);
+      ctx.lineTo(playRight, y);
+      ctx.stroke();
+      const x = canDrawOutside ? labelOutsideX : Math.max(playLeft + 4, labelInsideX);
+      ctx.fillStyle = "#00f030";
+      ctx.fillText(formatBpm(change.bpm * playbackSpeed()), x, y);
+    }
+    ctx.restore();
+  }
+
+  function draw(time, frameTime = performance.now()) {
     const width = state.canvasWidth, height = state.canvasHeight;
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = themeColor("--canvas-bg");
-    ctx.fillRect(0, 0, width, height);
+    if (!drawPlayfieldBgaBackdrop(width, height, frameTime)) {
+      ctx.fillStyle = themeColor("--canvas-bg");
+      ctx.fillRect(0, 0, width, height);
+    }
     const chart = state.chart;
     if (chart?.mode?.drawPlayfield) {
+      state.effects = state.effects.filter((effect) => time - effect.started < HIT_EFFECT_DURATION);
       chart.mode.drawPlayfield({
         context: ctx,
         chart,
         time,
         width,
         height,
+        scrollMode: ui.scrollMode.value,
+        fixedScrollSpeed: Number(ui.speed.value),
+        hiSpeed: hiSpeed(),
+        effects: state.effects,
+        hitEffectsEnabled: ui.hitEffects.checked,
+        hitEffectDuration: HIT_EFFECT_DURATION,
+        frameTime,
         speed: ui.scrollMode.value === "iidx"
           ? Math.max(0.25, hiSpeed())
           : Math.max(0.25, Number(ui.speed.value) / 400)
@@ -2191,14 +2766,22 @@
     const hasScratch = chart?.hasScratch !== false;
     const geometry = laneGeometry(lanes, fieldWidth, left, hasScratch);
     const judgeY = height - 86;
+    const judgeTopY = judgeY - JUDGE_LINE_WIDTH / 2;
 
     for (let lane = 0; lane < lanes; lane++) {
       const column = geometry[lane];
-      ctx.fillStyle = column.scratch
-        ? themeColor("--lane-scratch")
-        : isWhiteKeyLane(lane, lanes, hasScratch)
-          ? themeColor("--lane-white")
-          : themeColor("--lane-blue");
+      const laneAlpha = Math.max(0.3, Math.min(0.95, Number(ui.laneDarkness.value) / 100));
+      ctx.fillStyle = state.bgaBackdrop
+        ? column.scratch
+          ? `rgba(12, 8, 4, ${laneAlpha})`
+          : isWhiteKeyLane(lane, lanes, hasScratch)
+            ? `rgba(18, 24, 29, ${laneAlpha})`
+            : `rgba(5, 8, 12, ${Math.min(0.98, laneAlpha + 0.04)})`
+        : column.scratch
+          ? themeColor("--lane-scratch")
+          : isWhiteKeyLane(lane, lanes, hasScratch)
+            ? themeColor("--lane-white")
+            : themeColor("--lane-blue");
       ctx.fillRect(column.x, 0, column.width, height);
       ctx.strokeStyle = themeColor("--lane-border");
       ctx.beginPath(); ctx.moveTo(column.x, 0); ctx.lineTo(column.x, height); ctx.stroke();
@@ -2211,13 +2794,13 @@
       ctx.fillStyle = "#90a8b5";
       ctx.fillRect(centerX - 1, 0, 2, height);
     }
-    ctx.strokeStyle = themeColor("--judge-line"); ctx.lineWidth = 3;
+    ctx.strokeStyle = themeColor("--judge-line"); ctx.lineWidth = JUDGE_LINE_WIDTH;
     ctx.beginPath(); ctx.moveTo(left, judgeY); ctx.lineTo(left + fieldWidth, judgeY); ctx.stroke();
     ctx.lineWidth = 1;
 
     if (chart) {
       const fixedPxPerSecond = Number(ui.speed.value);
-      const pixelsPerBeat = judgeY * hiSpeed() / 4;
+      const pixelsPerBeat = judgeTopY * hiSpeed() / 4;
       const currentBeat = chart.secondsToBeat(time);
       const visibleSeconds = height / Math.max(1, fixedPxPerSecond);
       const lastBeat = Math.ceil(ui.scrollMode.value === "fixed"
@@ -2230,7 +2813,7 @@
           ? (beat - currentBeat) * pixelsPerBeat
           : (chart.beatToSeconds(beat) - time) * fixedPxPerSecond;
         if (distance < 0 || distance > height) continue;
-        const y = judgeY - distance;
+        const y = judgeTopY - distance;
         ctx.strokeStyle = themeColor("--measure-line");
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -2245,6 +2828,8 @@
       const noteDistance = (note) => ui.scrollMode.value === "iidx"
         ? (note.beat - currentBeat) * pixelsPerBeat
         : (note.time - time) * fixedPxPerSecond;
+      drawBpmChangeMarkers(chart, currentBeat, lastBeat, noteDistance, left, left + fieldWidth, judgeTopY, height, width);
+      const activeLongHolds = [];
 
       for (const note of chart.longNotes) {
         if (!note.longStart || !note.longPair) continue;
@@ -2253,8 +2838,10 @@
         if (endDistance <= 0 || startDistance > height || endDistance > height && startDistance > height) continue;
         const lane = laneFor(note, lanes);
         const column = geometry[lane];
-        const startY = Math.min(judgeY, judgeY - startDistance);
-        const endY = Math.max(0, judgeY - endDistance);
+        const startBottomY = Math.min(judgeTopY, judgeTopY - startDistance);
+        const endBottomY = Math.max(0, judgeTopY - endDistance);
+        const startTopY = startBottomY - noteThickness;
+        const endTopY = endBottomY - noteThickness;
         const bodyX = column.x + Math.max(5, column.width * 0.22);
         const bodyWidth = Math.max(4, column.width - Math.max(10, column.width * 0.44));
         const noteColor = column.scratch
@@ -2262,15 +2849,22 @@
           : isWhiteKeyLane(lane, lanes, hasScratch)
             ? themeColor("--note-white")
             : themeColor("--note-blue");
+        if (ui.hitEffects.checked && time >= note.time && time <= note.longPair.time) {
+          activeLongHolds.push({
+            column,
+            color: hitEffectColor(note, lane, chart),
+            startTime: note.time
+          });
+        }
         ctx.globalAlpha = 0.62;
         ctx.fillStyle = noteColor;
-        ctx.fillRect(bodyX, endY, bodyWidth, Math.max(noteThickness, startY - endY));
+        ctx.fillRect(bodyX, endBottomY, bodyWidth, Math.max(noteThickness, startTopY - endBottomY));
         ctx.globalAlpha = 1;
         ctx.strokeStyle = noteColor;
-        ctx.strokeRect(bodyX + .5, endY + .5, bodyWidth - 1, Math.max(noteThickness, startY - endY) - 1);
+        ctx.strokeRect(bodyX + .5, endBottomY + .5, bodyWidth - 1, Math.max(noteThickness, startTopY - endBottomY) - 1);
         ctx.fillStyle = noteColor;
-        ctx.fillRect(column.x + 3, endY - noteThickness / 2, column.width - 6, noteThickness);
-        ctx.fillRect(column.x + 3, startY - noteThickness / 2, column.width - 6, noteThickness);
+        ctx.fillRect(column.x + 3, endTopY, column.width - 6, noteThickness);
+        ctx.fillRect(column.x + 3, startTopY, column.width - 6, noteThickness);
       }
 
       const visibleStart = upperBoundTime(notes, time);
@@ -2282,18 +2876,18 @@
         if (/^[56]/.test(note.channel)) continue;
         const delta = note.time - time;
         const distance = noteDistance(note);
-        if (distance <= 0 || (ui.scrollMode.value === "fixed" && delta > visibleSeconds) || distance > height) continue;
+        if (distance < 0 || (ui.scrollMode.value === "fixed" && delta > visibleSeconds) || distance > height) continue;
         const lane = laneFor(note, lanes);
         const column = geometry[lane];
-        const y = judgeY - distance;
+        const bottomY = judgeTopY - distance;
         ctx.fillStyle = column.scratch
           ? themeColor("--note-scratch")
           : isWhiteKeyLane(lane, lanes, hasScratch)
             ? themeColor("--note-white")
             : themeColor("--note-blue");
-        ctx.fillRect(column.x + 3, y - noteThickness / 2, column.width - 6, noteThickness);
+        ctx.fillRect(column.x + 3, bottomY - noteThickness, column.width - 6, noteThickness);
         ctx.fillStyle = "rgba(255,255,255,.55)";
-        ctx.fillRect(column.x + 4, y - noteThickness / 2 + 1, column.width - 8, Math.min(2, noteThickness));
+        ctx.fillRect(column.x + 4, bottomY - noteThickness + 1, column.width - 8, Math.min(2, noteThickness));
       }
 
       if (state.suddenEnabled) {
@@ -2306,25 +2900,27 @@
         ctx.fillRect(left, coverHeight, fieldWidth, 1);
       }
 
-      state.effects = state.effects.filter((effect) => time - effect.started < 0.24);
+      state.effects = state.effects.filter((effect) => time - effect.started < HIT_EFFECT_DURATION);
+      const regularLaneWidth = Math.min(...geometry.filter((column) => !column.scratch).map((column) => column.width));
+      const effectBaseLaneWidth = Number.isFinite(regularLaneWidth) ? regularLaneWidth : geometry[0]?.width || 42;
+      for (const hold of activeLongHolds) {
+        drawHoldLaneEffect(hold.column, hold.color, judgeTopY, time, hold.startTime, effectBaseLaneWidth);
+      }
       for (const effect of state.effects) {
         const column = geometry[effect.lane];
+        if (!column) continue;
         const age = time - effect.started;
-        const life = Math.max(0, 1 - age / 0.24);
+        const normalizedAge = Math.max(0, Math.min(1, age / HIT_EFFECT_DURATION));
+        const life = Math.pow(1 - normalizedAge, 1.35);
         const x = column.x;
-        const center = x + column.width / 2;
-        const radius = 12 + age * 95;
-        const glow = ctx.createRadialGradient(center, judgeY, 0, center, judgeY, radius);
-        glow.addColorStop(0, effect.color);
-        glow.addColorStop(0.35, effect.color + "99");
-        glow.addColorStop(1, effect.color + "00");
+        drawLaneLightBar(column, effect, judgeTopY, life);
+        drawBombEffect(column, effect, judgeTopY, age, life, effectBaseLaneWidth);
         ctx.globalAlpha = life;
-        ctx.fillStyle = glow;
-        ctx.fillRect(x - radius / 2, judgeY - radius, column.width + radius, radius * 2);
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(x + 3, judgeY - 5, column.width - 6, 10);
+        ctx.fillRect(x + 3, judgeTopY - noteThickness, column.width - 6, noteThickness);
         ctx.globalAlpha = 1;
       }
+      drawLaneReadout(chart, time, left, left + fieldWidth, judgeY, width, height);
     }
   }
 
@@ -2348,11 +2944,11 @@
       updateTempoDisplay();
     } else {
       ui.speed.min = "50";
-      ui.speed.max = "2000";
+      ui.speed.max = "4000";
       ui.speed.step = "10";
       ui.speed.value = String(state.fixedScrollSpeed);
       ui.speedValue.min = "50";
-      ui.speedValue.max = "2000";
+      ui.speedValue.max = "4000";
       ui.speedValue.step = "10";
       ui.speedValue.value = String(state.fixedScrollSpeed);
       ui.scrollModeValue.value = "PX";
@@ -2369,7 +2965,7 @@
 
   function restartPlaybackForAudioChange() {
     state.stretchedBuffers.clear();
-    if (state.chart && state.playing) seekTo(state.pausedAt);
+    if (state.chart && state.playing) seekTo(chartTimeNow());
   }
 
   function clamp(value, minimum, maximum) {
@@ -2377,8 +2973,30 @@
   }
 
   function bindControls() {
-    ui.openFile.addEventListener("click", () => ui.files.click());
-    ui.openFolder.addEventListener("click", () => ui.folder.click());
+    const setOpenMenu = (open) => {
+      ui.openMenuPanel.hidden = !open;
+      ui.openButton.setAttribute("aria-expanded", String(open));
+    };
+    ui.openButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setOpenMenu(ui.openMenuPanel.hidden);
+    });
+    ui.openFilesOption.addEventListener("click", () => {
+      setOpenMenu(false);
+      ui.files.click();
+    });
+    ui.openFolderOption.addEventListener("click", () => {
+      setOpenMenu(false);
+      ui.folder.click();
+    });
+    document.addEventListener("click", (event) => {
+      if (!ui.openMenu.contains(event.target)) setOpenMenu(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.code === "Escape") setOpenMenu(false);
+    });
+    window.addEventListener("stepmaniaSkinLoaded", () => draw(chartTimeNow()));
+    ui.sidePanelToggle.addEventListener("click", () => setSidePanelCollapsed(!state.sidePanelCollapsed));
     ui.files.addEventListener("change", async () => {
       await loadFiles(ui.files.files);
       ui.files.value = "";
@@ -2390,6 +3008,7 @@
     ui.select.addEventListener("change", () => selectChart(Number(ui.select.value)));
     ui.play.addEventListener("click", () => state.playing ? pause() : play());
     ui.stop.addEventListener("click", stop);
+    ui.bgaBackdropToggle.addEventListener("click", () => setBgaBackdrop(!state.bgaBackdrop));
     viewButtons.forEach((button) => {
       button.addEventListener("click", () => switchView(button.dataset.view));
     });
@@ -2412,6 +3031,7 @@
     });
 
     ui.scrollMode.addEventListener("change", updateScrollControls);
+    ui.stepmaniaScrollDirection.addEventListener("change", () => draw(state.pausedAt));
     ui.speed.addEventListener("input", () => {
       if (ui.scrollMode.value === "iidx") {
         state.iidxHispeed = Number(ui.speed.value) / 100;
@@ -2431,7 +3051,7 @@
         ui.speed.value = String(Math.round(state.iidxHispeed * 100));
         updateTempoDisplay();
       } else {
-        state.fixedScrollSpeed = clamp(value, 50, 2000);
+        state.fixedScrollSpeed = clamp(value, 50, 4000);
         ui.speed.value = String(state.fixedScrollSpeed);
       }
       draw(state.pausedAt);
@@ -2444,6 +3064,10 @@
     bindRange(ui.columnWidth, ui.columnWidthValue, "%");
     bindRange(ui.scratchWidth, ui.scratchWidthValue, "%");
     bindRange(ui.noteThickness, ui.noteThicknessValue, "px");
+    bindRange(ui.bgaBlur, ui.bgaBlurValue, "px", invalidateBgaBackdrop);
+    bindRange(ui.bgaDarkness, ui.bgaDarknessValue, "%", invalidateBgaBackdrop);
+    bindRange(ui.laneDarkness, ui.laneDarknessValue, "%", () => draw(state.pausedAt));
+    bindRange(ui.stepmaniaColumnSpacing, ui.stepmaniaColumnSpacingValue, "%", () => draw(state.pausedAt));
     bindRange(ui.suddenAmount, ui.suddenAmountValue, "%", () => {
       updateTempoDisplay();
       draw(state.pausedAt);
@@ -2466,15 +3090,12 @@
     });
 
     ui.songSpeed.addEventListener("input", () => {
-      ui.songSpeedValue.value = ui.songSpeed.value;
-      updateTempoDisplay();
+      setPlaybackRate(ui.songSpeed.value);
     });
     ui.songSpeedValue.addEventListener("input", () => {
       const value = Number(ui.songSpeedValue.value);
       if (!Number.isFinite(value)) return;
-      const clamped = clamp(value, 50, 200);
-      ui.songSpeed.value = String(clamped);
-      updateTempoDisplay();
+      setPlaybackRate(value);
     });
     ui.songSpeed.addEventListener("change", restartPlaybackForAudioChange);
     ui.songSpeedValue.addEventListener("change", () => {
@@ -2482,6 +3103,11 @@
       restartPlaybackForAudioChange();
     });
     ui.pitchWithSpeed.addEventListener("change", restartPlaybackForAudioChange);
+    ui.keysounds.addEventListener("change", async () => {
+      await updatePlaybackEnd();
+      restartPlaybackForAudioChange();
+      ui.time.textContent = `${formatTime(state.pausedAt)} / ${formatTime(playbackEndTime())}`;
+    });
 
     ui.volume.addEventListener("input", () => {
       ui.volumeValue.value = `${Math.round(Number(ui.volume.value) * 100)}%`;
@@ -2493,13 +3119,14 @@
     });
     ui.seek.addEventListener("input", () => {
       if (!state.chart) return;
-      const target = Number(ui.seek.value) / 1000 * state.chart.duration;
-      ui.time.textContent = `${formatTime(target)} / ${formatTime(state.chart.duration)}`;
+      const endTime = playbackEndTime();
+      const target = Number(ui.seek.value) / 1000 * endTime;
+      ui.time.textContent = `${formatTime(target)} / ${formatTime(endTime)}`;
       draw(target);
     });
     ui.seek.addEventListener("change", async () => {
       state.seeking = false;
-      await seekTo(Number(ui.seek.value) / 1000 * state.chart.duration);
+      await seekTo(Number(ui.seek.value) / 1000 * playbackEndTime());
     });
     ui.back.addEventListener("click", () => seekTo(state.pausedAt - 10));
     ui.forward.addEventListener("click", () => seekTo(state.pausedAt + 10));
@@ -2532,18 +3159,29 @@
     });
     for (const media of [ui.video, ui.layerVideo]) {
       media.addEventListener("error", () => {
-        ui.status.textContent = "A BGA video could not be decoded by this browser.";
+        const source = media.dataset.sourcePath || media.currentSrc || media.src || "";
+        const hint = BROWSER_UNSUPPORTED_MEDIA_EXTENSIONS.has(splitFilename(source.toLowerCase()).extension)
+          ? " WMV/ASF video is not decoded by this browser; convert it to MP4/WebM."
+          : "";
+        ui.status.textContent = `A BGA video could not be decoded by this browser.${hint}`;
       });
     }
   }
 
   function initialize() {
-    ui.songSpeed.value = "100";
-    ui.songSpeedValue.value = "100";
+    setPlaybackRate(100);
+    ui.pitchWithSpeed.checked = false;
     ui.columnWidth.value = "80";
     ui.columnWidthValue.value = "80%";
     ui.scratchWidth.value = "155";
     ui.scratchWidthValue.value = "155%";
+    ui.bgaBlur.value = "4";
+    ui.bgaBlurValue.value = "4px";
+    ui.bgaDarkness.value = "48";
+    ui.bgaDarknessValue.value = "48%";
+    ui.laneDarkness.value = "72";
+    ui.laneDarknessValue.value = "72%";
+    ui.stepmaniaScrollDirection.value = "up";
 
     bindControls();
     document.documentElement.removeAttribute("data-theme");
@@ -2553,12 +3191,16 @@
     const canvasObserver = new ResizeObserver(() => {
       syncCanvasSize();
       draw(state.pausedAt);
+      renderPlayerRadar();
     });
     canvasObserver.observe(ui.canvas);
 
     syncCanvasSize();
     updateLaneArrangement();
     updateScrollControls();
+    setSidePanelCollapsed(true);
+    setBgaBackdrop(false);
+    renderPlayerRadar();
     ui.status.textContent += supportsHevc() ? " HEVC is available." : " HEVC is unavailable; compatible video fallbacks will be tried.";
   }
 
