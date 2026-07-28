@@ -12,7 +12,7 @@ Browser-based chart viewer for vertical scrolling rhythm game charts. It is buil
 - BMSON 1.0
 - osu!mania `.osu`, `.osz`, and regular `.zip` packs
 - StepMania / Etterna `.sm` and `.ssc`
-- UMIGURI `.ugc` V4 and V8 charts
+- UMIGURI `.ugc` V4 and V8 charts WIP
 
 ## Features
 
