@@ -58,6 +58,16 @@
     base: $("base"),
     scrollMode: $("scrollMode"),
     scrollModeValue: $("scrollModeValue"),
+    ugcSettings: $("ugcSettings"),
+    ugcSpeed: $("ugcSpeed"),
+    ugcSpeedValue: $("ugcSpeedValue"),
+    ugcMirror: $("ugcMirror"),
+    ugcLines: $("ugcLines"),
+    ugcColor: $("ugcColor"),
+    ugcScale: $("ugcScale"),
+    ugcScaleValue: $("ugcScaleValue"),
+    ugcOffset: $("ugcOffset"),
+    ugcOffsetValue: $("ugcOffsetValue"),
     speedLabel: $("speedLabel"),
     speed: $("speed"),
     speedValue: $("speedValue"),
@@ -94,6 +104,10 @@
     currentKps: $("currentKps"),
     peakKps: $("peakKps"),
     status: $("status"),
+    startView: $("startView"),
+    startStatus: $("startStatus"),
+    viewTabs: $("viewTabs"),
+    chartControls: $("chartControls"),
     playerView: $("playerView"),
     inspectorView: $("inspectorView"),
     inspectorTitle: $("inspectorTitle"),
@@ -142,6 +156,7 @@
     lastUiUpdate: 0,
     frame: 0,
     playing: false,
+    starting: false,
     seeking: false,
     playGeneration: 0,
     videoUrl: "",
@@ -150,6 +165,7 @@
     bgaFallbackIndex: 0,
     bgaOffset: 0,
     bgaAssets: new Map(),
+    ugcJacket: null,
     bgaBase: null,
     bgaLayer: null,
     bgaWantedBase: "",
@@ -952,23 +968,30 @@
   }
 
   function resetLoadedContent() {
+    state.chart = null;
+    syncViewVisibility();
+    ui.startStatus.textContent = "Opening chart…";
+    state.ugcJacket = null;
     stop();
+    ui.select.replaceChildren();
+    for (const control of [ui.select, ui.stop, ui.seek, ui.back, ui.forward]) control.disabled = true;
     for (const assetPromise of state.bgaAssets.values()) {
-      Promise.resolve(assetPromise).then((asset) => {
+      assetPromise.then((asset) => {
         if (asset?.kind === "video") URL.revokeObjectURL(asset.url);
         if (asset?.kind === "image") asset.source?.close?.();
-      });
+      }, () => { /* Failed loads have no asset to release. */ });
     }
     state.bgaAssets.clear();
     state.bgaBase = null;
     state.bgaLayer = null;
-    state.files.clear();
+    state.files = new Map();
     state.charts = [];
   }
 
-  async function loadCollectedFiles() {
-    const chartFiles = [...state.files.values()].filter((file) => PlayerModes.find(file));
+  async function loadCollectedFiles(files) {
+    const chartFiles = [...files.values()].filter((file) => PlayerModes.find(file));
     for (const file of chartFiles) {
+      if (state.files !== files) return;
       try {
         const parsed = await PlayerModes.parse(file, {
           decodeText,
@@ -977,11 +1000,13 @@
           parseOsu
         });
         const charts = Array.isArray(parsed) ? parsed : [parsed];
+        if (state.files !== files) return;
         for (const chart of charts) if (chart) state.charts.push(chart);
       } catch (error) {
         console.error(file.name, error);
       }
     }
+    if (state.files !== files) return;
     state.charts.sort((a, b) => a.name.localeCompare(b.name));
     ui.select.innerHTML = "";
     for (let index = 0; index < state.charts.length; index++) {
@@ -999,6 +1024,7 @@
     ui.back.disabled = !state.charts.length;
     ui.forward.disabled = !state.charts.length;
     if (state.charts.length) selectChart(0);
+    else ui.startStatus.textContent = "No readable charts found. Choose another folder or file.";
     ui.status.textContent = `${state.charts.length} chart(s), ${state.files.size} files loaded.`;
   }
 
@@ -1027,41 +1053,46 @@
     return subartist ? `${artist} · ${subartist}` : artist;
   }
 
-  function addRegularFile(file) {
+  function addRegularFile(files, file) {
     const relative = file.webkitRelativePath || file.name;
     const parts = relative.split("/");
     if (parts.length > 1) parts.shift();
-    state.files.set(normalizePath(parts.join("/")), file);
+    files.set(normalizePath(parts.join("/")), file);
   }
 
-  async function addZipArchive(file) {
+  async function addZipArchive(files, file) {
     const archive = fflate.unzipSync(new Uint8Array(await file.arrayBuffer()));
     for (const [path, bytes] of Object.entries(archive)) {
       if (path.endsWith("/")) continue;
       const name = path.split("/").pop();
-      state.files.set(normalizePath(path), new File([bytes], name || path));
+      files.set(normalizePath(path), new File([bytes], name || path));
     }
   }
 
   async function loadFiles(fileList) {
     if (!fileList?.length) return;
     resetLoadedContent();
+    const files = state.files;
     for (const file of fileList) {
+      if (state.files !== files) return;
       ui.status.textContent = `Opening ${file.name}...`;
       try {
-        if (/\.(osz|zip)$/i.test(file.name)) await addZipArchive(file);
-        else addRegularFile(file);
+        if (/\.(osz|zip)$/i.test(file.name)) await addZipArchive(files, file);
+        else addRegularFile(files, file);
       } catch (error) {
         console.error(file.name, error);
         ui.status.textContent = `Could not open ${file.name}.`;
       }
     }
-    await loadCollectedFiles();
+    if (state.files === files) await loadCollectedFiles(files);
   }
 
   function selectChart(index) {
     stop();
     state.chart = state.charts[index];
+    syncViewVisibility();
+    if (state.view === "player") syncCanvasSize();
+    ui.play.disabled = !state.chart;
     state.buffers.clear();
     state.stretchedBuffers.clear();
     state.failedAudio.clear();
@@ -1103,6 +1134,15 @@
     ui.time.textContent = `00:00 / ${formatTime(playbackEndTime(c))}`;
     ui.seek.value = "0";
     const customField = Boolean(c.mode?.drawPlayfield);
+    const ugc = c.modeId === "ugc";
+    ui.playerView.classList.toggle("ugc-mode", ugc);
+    ui.ugcSettings.hidden = !ugc;
+    ui.scrollMode.closest(".setting-group").hidden = ugc;
+    for (const control of [ui.columnWidth, ui.scratchWidth, ui.sudden, ui.laneArrangement1, ui.noteThickness]) {
+      const row = control.closest("label, .sudden-control, .lane-arrangement");
+      if (row) row.hidden = ugc;
+    }
+    document.querySelectorAll(".mod-control, .inspector-mod-control").forEach((row) => { row.hidden = ugc; });
     modButtons.forEach((button) => {
       button.disabled = customField;
     });
@@ -1123,6 +1163,14 @@
     updateLiveStats(0);
     renderPlayerRadar();
     renderInspector();
+    state.ugcJacket = null;
+    if (c.modeId === "ugc" && c.jacket) {
+      loadBgaAsset(c.jacket, false, true).then(asset => {
+        if (state.chart !== c || asset?.kind !== "image") return;
+        state.ugcJacket = asset.source;
+        if (!state.playing) draw(state.pausedAt);
+      }).catch(() => { /* The playback header also supports charts without a readable jacket. */ });
+    }
     state.bgaPreloadPromise = preloadBgaAssets(c);
     updateBgaBackdropAvailability(c);
     updateBga(0);
@@ -1198,22 +1246,20 @@
   }
 
   function setPlaybackRate(percent) {
+    if (!Number.isFinite(Number(percent))) return;
     const previousRate = playbackSpeed();
     const endTime = playbackEndTime();
     const liveTime = state.chart
-      ? Math.min(endTime - 0.01, chartTimeNow(previousRate))
+      ? Math.max(0, Math.min(endTime - 0.01, chartTimeNow(previousRate)))
       : chartTimeNow(previousRate);
     const clamped = clamp(Number(percent), 50, 200);
     state.playbackRate = clamped / 100;
     ui.songSpeed.value = String(clamped);
     ui.songSpeedValue.value = String(clamped);
-    if (state.playing && state.audio) {
-      state.startAt = state.audio.currentTime - liveTime / playbackSpeed();
-      state.pausedAt = liveTime;
-      state.lastTime = liveTime;
-      state.nextScheduleAt = Math.min(state.nextScheduleAt, liveTime);
-      updateBga(liveTime);
-      draw(liveTime);
+    if (previousRate !== playbackSpeed() && (state.playing || state.starting)) {
+      // Rebuild both the audio schedule and clock together, including while
+      // dragging the slider. An old-rate source must never accompany a new clock.
+      void seekTo(liveTime);
     }
     updateTempoDisplay(liveTime);
   }
@@ -1240,7 +1286,7 @@
     if (!state.chart) return;
     const effectiveBpm = bpmAt(time) * playbackSpeed();
     ui.bpm.textContent = formatBpm(effectiveBpm);
-    if (ui.scrollMode.value === "iidx") {
+    if (state.chart.modeId !== "ugc" && ui.scrollMode.value === "iidx") {
       ui.scrollModeValue.value = String(Math.round(greenNumber(time)));
     }
   }
@@ -1286,11 +1332,12 @@
     let end = chart.duration;
     for (const event of groups.flat()) {
       const buffer = await getAudioBuffer(event.object);
-      if (!buffer || state.chart !== chart) continue;
+      if (state.chart !== chart) return;
+      if (!buffer) continue;
       const offset = Math.max(0, Number(event.audioOffset) || 0);
       const remaining = Math.max(0, buffer.duration - offset);
       const duration = Number(event.audioDuration) > 0
-        ? Math.min(Number(event.audioDuration), remaining || Number(event.audioDuration))
+        ? Math.min(Number(event.audioDuration), remaining)
         : remaining;
       end = Math.max(end, event.time + duration);
     }
@@ -1298,9 +1345,12 @@
   }
 
   async function getPlaybackBuffer(object) {
-    const buffer = await getAudioBuffer(object);
+    const chart = state.chart;
     const speed = playbackSpeed();
-    if (!buffer || ui.pitchWithSpeed.checked || Math.abs(speed - 1) < 0.001) return buffer;
+    const changesPitch = ui.pitchWithSpeed.checked;
+    const buffer = await getAudioBuffer(object);
+    if (state.chart !== chart || speed !== playbackSpeed() || changesPitch !== ui.pitchWithSpeed.checked) return null;
+    if (!buffer || changesPitch || Math.abs(speed - 1) < 0.001) return buffer;
 
     const key = `${object}:${speed.toFixed(3)}`;
     if (state.stretchedBuffers.has(key)) return state.stretchedBuffers.get(key);
@@ -1310,13 +1360,12 @@
   }
 
   function stretchAudioBuffer(buffer, speed) {
-    const windowSize = 2048;
-    const synthesisHop = 512;
-    const analysisHop = synthesisHop * speed;
-    const outputLength = Math.max(
-      windowSize,
-      Math.ceil(buffer.length / speed) + windowSize
-    );
+    // Center overlap-add windows on the timeline. Boundary windows are partial
+    // instead of being discarded, so short keysounds and the final tail survive.
+    const windowSize = Math.min(2048, Math.max(2, buffer.length));
+    const synthesisHop = Math.max(1, Math.floor(windowSize / 4));
+    const halfWindow = Math.floor(windowSize / 2);
+    const outputLength = Math.max(1, Math.ceil(buffer.length / speed));
     const output = state.audio.createBuffer(buffer.numberOfChannels, outputLength, buffer.sampleRate);
     const weights = new Float32Array(outputLength);
     const window = new Float32Array(windowSize);
@@ -1325,29 +1374,33 @@
       window[index] = 0.5 - 0.5 * Math.cos(2 * Math.PI * index / (windowSize - 1));
     }
 
-    let inputPosition = 0;
-    let outputPosition = 0;
-    while (inputPosition + windowSize < buffer.length && outputPosition + windowSize < outputLength) {
-      const inputStart = Math.floor(inputPosition);
-      const outputStart = Math.floor(outputPosition);
-      for (let sample = 0; sample < windowSize; sample++) {
+    for (let outputCenter = 0; outputCenter < outputLength + halfWindow; outputCenter += synthesisHop) {
+      const inputStart = Math.round(outputCenter * speed) - halfWindow;
+      const outputStart = outputCenter - halfWindow;
+      const first = Math.max(0, -inputStart, -outputStart);
+      const last = Math.min(windowSize, buffer.length - inputStart, outputLength - outputStart);
+      for (let sample = first; sample < last; sample++) {
         weights[outputStart + sample] += window[sample];
       }
       for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
         const input = buffer.getChannelData(channel);
         const target = output.getChannelData(channel);
-        for (let sample = 0; sample < windowSize; sample++) {
+        for (let sample = first; sample < last; sample++) {
           target[outputStart + sample] += input[inputStart + sample] * window[sample];
         }
       }
-      inputPosition += analysisHop;
-      outputPosition += synthesisHop;
     }
 
     for (let channel = 0; channel < output.numberOfChannels; channel++) {
       const target = output.getChannelData(channel);
       for (let sample = 0; sample < target.length; sample++) {
-        if (weights[sample] > 0.001) target[sample] /= weights[sample];
+        if (weights[sample] > 1e-8) {
+          target[sample] /= weights[sample];
+        } else {
+          // A one/two-sample clip (or an uncovered rounded boundary) has no
+          // usable Hann overlap. Retain its sample rather than insert silence.
+          target[sample] = buffer.getChannelData(channel)[Math.min(buffer.length - 1, Math.floor(sample * speed))];
+        }
       }
     }
     return output;
@@ -1371,11 +1424,13 @@
       if (generation !== state.playGeneration) return false;
       const batch = needed.slice(start, start + batchSize);
       await Promise.all(batch.map(getPlaybackBuffer));
+      if (generation !== state.playGeneration) return false;
       const loaded = Math.min(start + batch.length, needed.length);
       ui.status.textContent = `Loading audio: ${loaded} / ${needed.length}`;
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
+    if (generation !== state.playGeneration) return false;
     if (state.missingAudio.size) {
       ui.status.textContent = `Missing audio: ${[...state.missingAudio].join(", ")}. Open the chart together with its media files or select its folder.`;
     } else if (state.failedAudio.size) {
@@ -1384,10 +1439,39 @@
       ui.status.textContent = `${needed.length} audio files loaded. Starting playback.`;
     }
     await updatePlaybackEnd();
-    return true;
+    return generation === state.playGeneration;
+  }
+
+  function startAudioEvent(event, buffer, generation, speed, changesPitch) {
+    if (!buffer || generation !== state.playGeneration || !state.playing) return;
+    const sourceRate = changesPitch ? speed : 1;
+    const divisor = changesPitch ? 1 : speed;
+    const scheduledTime = state.startAt + event.time / speed;
+    const when = Math.max(state.audio.currentTime, scheduledTime);
+    const elapsed = Math.max(0, when - scheduledTime) * sourceRate;
+    const sourceOffset = Math.max(0, Number(event.audioOffset) || 0) / divisor;
+    const offset = sourceOffset + elapsed;
+    const duration = Number(event.audioDuration) / divisor;
+    const remaining = Math.min(buffer.duration - offset, duration > 0 ? duration - elapsed : Infinity);
+    // A late decode/seek skips elapsed audio instead of replaying it out of sync.
+    if (offset < 0 || remaining <= 0) return;
+    const source = state.audio.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = sourceRate;
+    source.connect(state.gain);
+    source.onended = () => {
+      source.disconnect();
+      const index = state.sources.indexOf(source);
+      if (index >= 0) state.sources.splice(index, 1);
+    };
+    source.start(when, offset, remaining);
+    state.sources.push(source);
   }
 
   function scheduleAudioWindow(from, until) {
+    const generation = state.playGeneration;
+    const speed = playbackSpeed();
+    const changesPitch = ui.pitchWithSpeed.checked;
     const groups = ui.keysounds.checked
       ? [state.chart.bgmEvents, state.chart.keyEvents]
       : [state.chart.bgmEvents];
@@ -1399,19 +1483,7 @@
         if (state.scheduled.has(event)) continue;
         state.scheduled.add(event);
         getPlaybackBuffer(event.object).then((buffer) => {
-          if (!buffer || !state.playing) return;
-          const source = state.audio.createBufferSource();
-          source.buffer = buffer;
-          const changesPitch = ui.pitchWithSpeed.checked;
-          const speed = playbackSpeed();
-          source.playbackRate.value = changesPitch ? speed : 1;
-          source.connect(state.gain);
-          const when = Math.max(state.audio.currentTime, state.startAt + event.time / playbackSpeed());
-          const offset = Math.max(0, Number(event.audioOffset) || 0) / (changesPitch ? 1 : speed);
-          const duration = Number(event.audioDuration) / (changesPitch ? 1 : speed);
-          if (duration > 0) source.start(when, offset, duration);
-          else source.start(when, offset);
-          state.sources.push(source);
+          startAudioEvent(event, buffer, generation, speed, changesPitch);
         });
       }
     }
@@ -1422,30 +1494,14 @@
     const changesPitch = ui.pitchWithSpeed.checked;
     const pastBgm = state.chart.bgmEvents.slice(0, lowerBoundTime(state.chart.bgmEvents, atTime)).reverse();
 
-    for (const event of pastBgm) {
+    // Reserve the whole group before the first await; the normal scheduling
+    // window overlaps the seek point and must not start the same BGM twice.
+    const pending = pastBgm.filter((event) => !state.scheduled.has(event));
+    for (const event of pending) state.scheduled.add(event);
+    for (const event of pending) {
       const buffer = await getPlaybackBuffer(event.object);
       if (generation !== state.playGeneration || !state.playing) return;
-      if (!buffer) continue;
-
-      const currentChartTime = (state.audio.currentTime - state.startAt) * speed;
-      const chartElapsed = currentChartTime - event.time;
-      const sourceOffset = (Number(event.audioOffset) || 0) / (changesPitch ? 1 : speed);
-      const bufferOffset = sourceOffset + (changesPitch ? chartElapsed : chartElapsed / speed);
-      if (bufferOffset < 0 || bufferOffset >= buffer.duration) continue;
-      const sourceDuration = Number(event.audioDuration) / (changesPitch ? 1 : speed);
-      if (sourceDuration > 0 && bufferOffset >= sourceOffset + sourceDuration) continue;
-
-      state.scheduled.add(event);
-      const source = state.audio.createBufferSource();
-      source.buffer = buffer;
-      source.playbackRate.value = changesPitch ? speed : 1;
-      source.connect(state.gain);
-      const remaining = sourceDuration > 0
-        ? sourceOffset + sourceDuration - bufferOffset
-        : undefined;
-      if (remaining > 0) source.start(state.audio.currentTime, bufferOffset, remaining);
-      else source.start(state.audio.currentTime, bufferOffset);
-      state.sources.push(source);
+      startAudioEvent(event, buffer, generation, speed, changesPitch);
     }
   }
 
@@ -1462,50 +1518,72 @@
   }
 
   async function play() {
-    if (!state.chart || state.playing) return;
-    state.audio ||= new AudioContext();
-    state.gain ||= state.audio.createGain();
-    state.gain.connect(state.audio.destination);
-    state.gain.gain.value = Number(ui.volume.value);
-    await state.audio.resume();
+    if (!state.chart || state.playing || state.starting) return;
     const generation = ++state.playGeneration;
-    const ready = await preloadAudio(generation);
-    if (!ready || generation !== state.playGeneration) return;
-    ui.time.textContent = `${formatTime(state.pausedAt)} / ${formatTime(playbackEndTime())}`;
-    state.sources = [];
-    state.scheduled.clear();
-    state.hitNotes.clear();
-    state.effects = [];
-    state.lastTime = state.pausedAt;
-    state.startAt = state.audio.currentTime - state.pausedAt / playbackSpeed();
-    const offset = state.pausedAt;
-    state.nextScheduleAt = offset;
-    state.lastUiUpdate = 0;
-    state.playing = true;
-    state.bgaBase = null;
-    state.bgaLayer = null;
-    ui.play.disabled = false;
-    ui.play.textContent = "■";
-    ui.play.title = "Pause";
-    if (offset > 0) resumeActiveBgm(offset, generation);
-    scheduleAudioWindow(offset, offset + 8);
-    ui.status.textContent = state.missingAudio.size
-      ? `Playback running with missing audio: ${[...state.missingAudio].join(", ")}.`
-      : state.failedAudio.size
-        ? `Playback running with ${state.failedAudio.size} unsupported audio file(s).${unsupportedMediaHint(state.failedAudio)}`
-      : "Playback running.";
-    tick();
+    state.starting = true;
+    try {
+      state.audio ||= new AudioContext();
+      if (!state.gain) {
+        state.gain = state.audio.createGain();
+        state.gain.connect(state.audio.destination);
+      }
+      state.gain.gain.value = Number(ui.volume.value);
+      await state.audio.resume();
+      if (generation !== state.playGeneration) return;
+      const ready = await preloadAudio(generation);
+      if (!ready || generation !== state.playGeneration) return;
+      ui.time.textContent = `${formatTime(state.pausedAt)} / ${formatTime(playbackEndTime())}`;
+      state.sources = [];
+      state.scheduled.clear();
+      state.hitNotes.clear();
+      state.effects = [];
+      state.lastTime = state.pausedAt;
+      state.startAt = state.audio.currentTime - state.pausedAt / playbackSpeed();
+      const offset = state.pausedAt;
+      state.nextScheduleAt = offset;
+      state.lastUiUpdate = 0;
+      state.playing = true;
+      state.starting = false;
+      state.bgaBase = null;
+      state.bgaLayer = null;
+      ui.play.disabled = false;
+      ui.play.textContent = "■";
+      ui.play.title = "Pause";
+      if (offset > 0) resumeActiveBgm(offset, generation);
+      scheduleAudioWindow(offset, offset + 8);
+      ui.status.textContent = state.missingAudio.size
+        ? `Playback running with missing audio: ${[...state.missingAudio].join(", ")}.`
+        : state.failedAudio.size
+          ? `Playback running with ${state.failedAudio.size} unsupported audio file(s).${unsupportedMediaHint(state.failedAudio)}`
+        : "Playback running.";
+      tick();
+    } catch (error) {
+      if (generation === state.playGeneration) {
+        state.playing = false;
+        stopAudioSources();
+        ui.status.textContent = `Playback could not start: ${error.message || error}`;
+      }
+    } finally {
+      if (generation === state.playGeneration) {
+        state.starting = false;
+        ui.play.disabled = !state.chart;
+        if (!state.playing) ui.play.textContent = "▶";
+      }
+    }
   }
 
   function pause() {
-    if (!state.playing) return;
+    if (!state.playing && !state.starting) return;
+    state.pausedAt = chartTimeNow();
     state.playGeneration += 1;
     stopAudioSources();
     state.playing = false;
+    state.starting = false;
     cancelAnimationFrame(state.frame);
     ui.video.pause();
     ui.layerVideo.pause();
     ui.play.textContent = "▶";
+    ui.play.disabled = !state.chart;
     ui.play.title = "Resume";
     ui.status.textContent = `Paused at ${formatTime(state.pausedAt)}.`;
     draw(state.pausedAt);
@@ -1519,6 +1597,7 @@
     state.lastTime = 0;
     state.peakKps = 0;
     state.playing = false;
+    state.starting = false;
     state.pausedAt = 0;
     cancelAnimationFrame(state.frame);
     ui.play.textContent = "▶";
@@ -1594,6 +1673,7 @@
 
   function updateBgaBackdropAvailability(chart = state.chart) {
     const available = chartHasBga(chart);
+    ui.bgaCanvas.closest(".movie-stage").hidden = chart?.modeId === "ugc" && !available;
     ui.bgaBackdropToggle.hidden = !available;
     ui.bgaBackdropToggle.disabled = !available;
     if (!available && state.bgaBackdrop) setBgaBackdrop(false);
@@ -1620,9 +1700,10 @@
     }
     if (slotName === "base") state.bgaWantedBase = path;
     else state.bgaWantedLayer = path;
+    const chart = state.chart;
     loadBgaAsset(path, slotName === "layer", Boolean(event?.bmsonLayer)).then((asset) => {
       const wanted = slotName === "base" ? state.bgaWantedBase : state.bgaWantedLayer;
-      if (!asset || wanted !== path) return;
+      if (!asset || wanted !== path || state.chart !== chart) return;
       const slot = { ...asset, path, eventTime: event.time };
       if (slotName === "base") state.bgaBase = slot;
       else state.bgaLayer = slot;
@@ -1774,14 +1855,16 @@
     if (!state.chart) return;
     const endTime = playbackEndTime();
     const target = Math.max(0, Math.min(endTime - 0.01, time));
-    const resume = state.playing;
+    const resume = state.playing || state.starting;
     state.playGeneration += 1;
+    cancelAnimationFrame(state.frame);
     stopAudioSources();
     state.hitNotes.clear();
     state.effects = [];
     state.pausedAt = target;
     state.lastTime = target;
     state.playing = false;
+    state.starting = false;
     updateNoteCounter(target);
     updateLiveStats(target);
     updateLaneArrangement(target);
@@ -2055,10 +2138,18 @@
     ui.peakKps.textContent = state.peakKps.toFixed(1);
   }
 
+  function syncViewVisibility() {
+    const loaded = Boolean(state.chart);
+    ui.startView.hidden = loaded;
+    ui.viewTabs.hidden = !loaded;
+    ui.chartControls.hidden = !loaded;
+    ui.playerView.hidden = !loaded || state.view !== "player";
+    ui.inspectorView.hidden = !loaded || state.view !== "inspector";
+  }
+
   function switchView(view) {
     state.view = view === "inspector" ? "inspector" : "player";
-    ui.playerView.hidden = state.view !== "player";
-    ui.inspectorView.hidden = state.view !== "inspector";
+    syncViewVisibility();
     viewButtons.forEach((button) => {
       const active = button.dataset.view === state.view;
       button.classList.toggle("active", active);
@@ -2107,6 +2198,12 @@
     draw(state.pausedAt);
   }
 
+  function isAirOrScratch(chart, note) {
+    if (chart.ugc) return ["a", "H", "S", "C"].includes(note.parentType || note.type);
+    const lane = laneFor(note, chart.lanes);
+    return chart.hasScratch !== false && (lane === 0 || (chart.lanes === 16 && lane === 15));
+  }
+
   function chartAnalysis(chart) {
     const notes = chart.hitNotes;
     let peak = 0;
@@ -2117,13 +2214,15 @@
     }
     const chords = new Map();
     const laneCounts = Array(chart.lanes).fill(0);
-    let scratch = 0;
+    let special = 0, maxChord = 0;
     for (const note of notes) {
       const key = note.beat.toFixed(6);
       chords.set(key, (chords.get(key) || 0) + 1);
-      const lane = laneFor(note, chart.lanes);
-      laneCounts[lane]++;
-      if (chart.hasScratch !== false && (lane === 0 || (chart.lanes === 16 && lane === 15))) scratch++;
+      maxChord = Math.max(maxChord, chords.get(key));
+      if (chart.ugc) {
+        for (let lane = Math.max(0, Math.floor(note.x)); lane < Math.min(chart.lanes, Math.ceil(note.x + note.width)); lane++) laneCounts[lane]++;
+      } else laneCounts[laneFor(note, chart.lanes)]++;
+      if (isAirOrScratch(chart, note)) special++;
     }
     const bpms = chart.bpmChanges.map((change) => change.bpm).filter(Number.isFinite);
     const chordSizes = [...chords.values()].filter((count) => count >= 2);
@@ -2143,16 +2242,16 @@
     );
     return {
       peak,
-      maxChord: Math.max(0, ...chords.values()),
+      maxChord,
       laneCounts,
-      scratch,
+      special,
       longNotes: longCount,
       minBpm: Math.min(...bpms),
       maxBpm: Math.max(...bpms),
       radar: [
         Math.min(200, averageNps / 8 * 100),
         Math.min(200, peak / 18 * 100),
-        Math.min(200, scratch / Math.max(1, notes.length) / 0.2 * 100),
+        Math.min(200, special / Math.max(1, notes.length) / 0.2 * 100),
         Math.min(200, ((Math.log2(Math.max(1, bpmRatio)) / 2) + soflanChanges / 24) * 100),
         Math.min(200, longCount / Math.max(1, notes.length) / 0.25 * 100),
         Math.min(200, chordScore)
@@ -2176,13 +2275,20 @@
     ui.analysisNotes.textContent = String(chart.noteCount);
     ui.analysisPeak.textContent = analysis.peak.toFixed(1);
     ui.analysisChord.textContent = String(analysis.maxChord);
-    ui.analysisScratch.textContent = String(analysis.scratch);
+    $("analysisSpecialLabel").textContent = chart.ugc ? "AIR hits" : "Scratch";
+    $("laneDistributionTitle").textContent = chart.ugc ? "Hits covering each lane" : "Lane distribution";
+    $("keyLegend").hidden = !!chart.ugc;
+    $("ugcLegend").hidden = !chart.ugc;
+    if (chart.ugc) {
+      chart.mode.inspectorLegend($("ugcNoteSymbols"));
+      $("ugcNoteDetail").textContent = "Point to or tap a note for details.";
+    }
+    ui.analysisScratch.textContent = String(analysis.special);
     ui.analysisLong.textContent = String(analysis.longNotes);
     ui.analysisBpm.textContent = analysis.minBpm === analysis.maxBpm
       ? String(analysis.minBpm)
       : `${analysis.minBpm}-${analysis.maxBpm}`;
-    renderLaneDistribution(analysis.laneCounts);
-    renderDensityGraph(chart);
+    renderLaneDistribution(chart.ugc && ui.ugcMirror.checked ? analysis.laneCounts.reverse() : analysis.laneCounts);
     renderNotesRadar(ui.notesRadar, analysis.radar);
     renderMeasureGrid(chart);
   }
@@ -2209,6 +2315,7 @@
     });
   }
 
+  let densityCache;
   function renderDensityGraph(chart) {
     const canvas = ui.densityGraph;
     const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
@@ -2221,6 +2328,13 @@
       canvas.height = backingHeight;
     }
     const context = canvas.getContext("2d");
+    if (densityCache?.chart === chart && densityCache.width === cssWidth &&
+        densityCache.height === cssHeight && densityCache.ratio === pixelRatio) {
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.drawImage(densityCache.image, 0, 0);
+      drawDensityProgress(state.pausedAt);
+      return;
+    }
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     const width = cssWidth;
     const height = cssHeight;
@@ -2236,12 +2350,11 @@
       Math.max(72, Math.floor(plotWidth / 3.2))
     );
     const values = Array(bins).fill(0);
-    const scratchValues = Array(bins).fill(0);
+    const specialValues = Array(bins).fill(0);
     for (const note of chart.hitNotes) {
       const index = Math.min(bins - 1, Math.floor(note.time / duration * bins));
       values[index]++;
-      const lane = laneFor(note, chart.lanes);
-      if (chart.hasScratch !== false && (lane === 0 || (chart.lanes === 16 && lane === 15))) scratchValues[index]++;
+      if (isAirOrScratch(chart, note)) specialValues[index]++;
     }
     const maximum = Math.max(1, ...values);
     const sortedValues = values.filter((value) => value > 0).sort((a, b) => a - b);
@@ -2274,10 +2387,10 @@
       const barHeight = value / maximum * plotHeight;
       context.fillStyle = "rgba(150, 155, 154, .72)";
       context.fillRect(x, plotBottom - barHeight, barWidth, barHeight);
-      if (scratchValues[index]) {
-        const scratchHeight = scratchValues[index] / maximum * plotHeight;
-        context.fillStyle = "rgba(255, 82, 101, .9)";
-        context.fillRect(x, plotBottom - scratchHeight, barWidth, scratchHeight);
+      if (specialValues[index]) {
+        const specialHeight = specialValues[index] / maximum * plotHeight;
+        context.fillStyle = chart.ugc ? "#8dff98" : "rgba(255, 82, 101, .9)";
+        context.fillRect(x, plotBottom - specialHeight, barWidth, specialHeight);
       }
     });
     const medianY = plotBottom - medianDensity / maximum * plotHeight;
@@ -2342,6 +2455,10 @@
     context.fillText(formatTime(0), 0, height - 8);
     context.textAlign = "right";
     context.fillText(formatTime(duration), width - 1, height - 8);
+    const image = document.createElement("canvas");
+    image.width = backingWidth; image.height = backingHeight;
+    image.getContext("2d").drawImage(canvas, 0, 0);
+    densityCache = { chart, width, height, ratio: pixelRatio, image };
     drawDensityProgress(state.pausedAt);
   }
 
@@ -2401,7 +2518,7 @@
     const compact = Boolean(options.compact);
     const maximumRadius = Math.min(width * (compact ? 0.31 : 0.4), height * (compact ? 0.33 : 0.4));
     const radius100 = maximumRadius * 0.68;
-    const labels = ["NOTES", "PEAK", "SCRATCH", "SOF-LAN", "CHARGE", "CHORD"];
+    const labels = ["NOTES", "PEAK", state.chart?.ugc ? "AIR" : "SCRATCH", "SOF-LAN", "CHARGE", "CHORD"];
     const colors = ["#f064cf", "#f6d64a", "#ff7c58", "#6d7cff", "#49d8df", "#b7e65c"];
     const levelColor = currentDifficultyStyle()[1];
     const point = (axis, value = 100) => {
@@ -2489,8 +2606,9 @@
     const measuresPerColumn = Number(ui.inspectorColumnSize.value) || 4;
     const measureCount = Math.max(1, chart.measureStarts.length - 1);
     const groups = Array.from({ length: measureCount }, () => []);
-    for (const note of chart.displayNotes) {
-      const measure = Math.min(measureCount - 1, Math.max(0, note.measure ?? upperBoundValue(chart.measureStarts, note.beat) - 1));
+    for (const note of chart.ugc ? chart.hitNotes : chart.displayNotes) {
+      const authored = chart.ugc ? undefined : note.measure;
+      const measure = Math.min(measureCount - 1, Math.max(0, authored ?? upperBoundValue(chart.measureStarts, note.beat) - 1));
       groups[measure].push(note);
     }
     ui.measureGrid.replaceChildren();
@@ -2506,6 +2624,19 @@
         canvas.width = 324;
         canvas.height = 348;
         drawMeasure(canvas, chart, measure, groups[measure]);
+        if (chart.mode?.identifyNote) {
+          const identify = event => {
+            const rect = canvas.getBoundingClientRect(), mirror = ui.ugcMirror.checked;
+            const unit = (event.clientX - rect.left) / rect.width * 16;
+            const y = (event.clientY - rect.top) / rect.height * canvas.height;
+            const detail = chart.mode.identifyNote(chart, groups[measure], mirror ? 16-unit : unit,
+              y, canvas.height, chart.measureStarts[measure], chart.measureStarts[measure+1], mirror);
+            canvas.title = detail;
+            $("ugcNoteDetail").textContent = detail ? `Measure ${measure+1} · ${detail}` : "Point to or tap a note for details.";
+          };
+          canvas.addEventListener("pointermove", identify);
+          canvas.addEventListener("click", identify);
+        }
         const number = document.createElement("span");
         number.className = "measure-number";
         number.textContent = String(measure + 1);
@@ -2527,7 +2658,7 @@
     const endBeat = chart.measureStarts[measure + 1] ?? startBeat + 4;
     if (chart.mode?.drawMeasure) {
       chart.mode.drawMeasure({
-        context, chart, measure, notes, width, height, startBeat, endBeat
+        context, chart, measure, notes, width, height, startBeat, endBeat, settings: ugcSettings()
       });
       return;
     }
@@ -2603,26 +2734,26 @@
   function updateInspectorCurrent() {
     if (!state.chart || state.view !== "inspector") return;
     const beat = state.chart.secondsToBeat(state.pausedAt);
-    const measure = Math.max(0, upperBoundValue(state.chart.measureStarts, beat) - 1);
-    for (const card of ui.measureGrid.querySelectorAll(".measure-card")) {
-      const current = Number(card.dataset.measure) === measure;
-      card.classList.toggle("current", current);
+    const starts = state.chart.measureStarts;
+    const measure = Math.max(0, Math.min(starts.length - 2, upperBoundValue(starts, beat) - 1));
+    const old = ui.measureGrid.querySelector(".measure-card.current");
+    const card = Number(old?.dataset.measure) === measure ? old : ui.measureGrid.querySelector(`.measure-card[data-measure="${measure}"]`);
+    if (card !== old && old) {
+      old.classList.remove("current");
+      old.querySelector(".measure-progress").style.display = "none";
+    }
+    if (card) {
+      card.classList.add("current");
+      const start = starts[measure], end = starts[measure + 1] ?? start + 4;
+      const position = Math.max(0, Math.min(1, (beat - start) / Math.max(.001, end - start)));
       const progress = card.querySelector(".measure-progress");
-      if (progress) {
-        const startBeat = state.chart.measureStarts[measure] ?? 0;
-        const endBeat = state.chart.measureStarts[measure + 1] ?? startBeat + 4;
-        const position = current
-          ? Math.max(0, Math.min(1, (beat - startBeat) / Math.max(0.001, endBeat - startBeat)))
-          : 0;
-        progress.style.display = current ? "block" : "none";
-        progress.style.bottom = `${position * 100}%`;
-      }
+      progress.style.display = "block";
+      progress.style.bottom = `${position * 100}%`;
     }
     renderDensityGraph(state.chart);
     if (ui.inspectorFollow.checked && state.followedMeasure !== measure) {
       state.followedMeasure = measure;
-      const current = ui.measureGrid.querySelector(".measure-card.current");
-      current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      card?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     }
   }
 
@@ -2730,12 +2861,16 @@
 
   function draw(time, frameTime = performance.now()) {
     const width = state.canvasWidth, height = state.canvasHeight;
-    ctx.clearRect(0, 0, width, height);
-    if (!drawPlayfieldBgaBackdrop(width, height, frameTime)) {
+    if (state.view === "inspector" || !(width > 0 && height > 0)) return;
+    const chart = state.chart;
+    const ownStage = chart?.mode?.id === "ugc";
+    // The UGC stage is opaque and covers the canvas itself.
+    if (!ownStage || state.bgaBackdrop) ctx.clearRect(0, 0, width, height);
+    const hasBackdrop = drawPlayfieldBgaBackdrop(width, height, frameTime);
+    if (!hasBackdrop && !ownStage) {
       ctx.fillStyle = themeColor("--canvas-bg");
       ctx.fillRect(0, 0, width, height);
     }
-    const chart = state.chart;
     if (chart?.mode?.drawPlayfield) {
       state.effects = state.effects.filter((effect) => time - effect.started < HIT_EFFECT_DURATION);
       chart.mode.drawPlayfield({
@@ -2751,6 +2886,11 @@
         hitEffectsEnabled: ui.hitEffects.checked,
         hitEffectDuration: HIT_EFFECT_DURATION,
         frameTime,
+        settings: ugcSettings(),
+        jacket: state.ugcJacket,
+        hasBackdrop,
+        laneDarkness: Number(ui.laneDarkness.value) / 100,
+        noteThickness: Number(ui.noteThickness.value),
         speed: ui.scrollMode.value === "iidx"
           ? Math.max(0.25, hiSpeed())
           : Math.max(0.25, Number(ui.speed.value) / 400)
@@ -2963,9 +3103,49 @@
     });
   }
 
+  function ugcSettings() {
+    return {
+      noteSpeed: Number(ui.ugcSpeed.value),
+      mirror: ui.ugcMirror.checked,
+      divisions: Number(ui.ugcLines.value),
+      color: Number(ui.ugcColor.value),
+      scale: Number(ui.ugcScale.value) / 100,
+      visualDelay: Number(ui.ugcOffset.value) / 1000
+    };
+  }
+
+  function bindUgcSettings() {
+    const fields = [
+      [ui.ugcSpeed, ui.ugcSpeedValue, ""],
+      [ui.ugcScale, ui.ugcScaleValue, "%"],
+      [ui.ugcOffset, ui.ugcOffsetValue, "ms"],
+      [ui.ugcMirror], [ui.ugcLines], [ui.ugcColor]
+    ];
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem("vsrg-ugc-settings-v1")) || {}; } catch { /* Storage may be unavailable. */ }
+    for (const [input, output, suffix] of fields) {
+      const value = saved[input.id];
+      if (input.type === "checkbox") input.checked = value === true;
+      else if (value !== undefined && Number.isFinite(Number(value))) {
+        if (input.tagName === "SELECT") {
+          if ([...input.options].some((option) => option.value === String(value))) input.value = String(value);
+        } else input.value = String(clamp(Number(value), Number(input.min), Number(input.max)));
+      }
+      const update = () => {
+        if (output) output.value = input === ui.ugcSpeed ? (Number(input.value) === 20 ? "Sonic" : Number(input.value).toFixed(2)) : `${input.value}${suffix}`;
+        const values = Object.fromEntries(fields.map(([field]) => [field.id, field.type === "checkbox" ? field.checked : field.value]));
+        try { localStorage.setItem("vsrg-ugc-settings-v1", JSON.stringify(values)); } catch { /* Playback works without storage. */ }
+        draw(chartTimeNow());
+        if (state.chart?.modeId === "ugc" && state.view === "inspector" && input === ui.ugcMirror) renderInspector();
+      };
+      if (output) output.value = input === ui.ugcSpeed ? (Number(input.value) === 20 ? "Sonic" : Number(input.value).toFixed(2)) : `${input.value}${suffix}`;
+      input.addEventListener("input", update);
+    }
+  }
+
   function restartPlaybackForAudioChange() {
     state.stretchedBuffers.clear();
-    if (state.chart && state.playing) seekTo(chartTimeNow());
+    if (state.chart && (state.playing || state.starting)) seekTo(chartTimeNow());
   }
 
   function clamp(value, minimum, maximum) {
@@ -2973,6 +3153,8 @@
   }
 
   function bindControls() {
+    $("startFolder").addEventListener("click", () => ui.folder.click());
+    $("startFiles").addEventListener("click", () => ui.files.click());
     const setOpenMenu = (open) => {
       ui.openMenuPanel.hidden = !open;
       ui.openButton.setAttribute("aria-expanded", String(open));
@@ -2997,16 +3179,15 @@
     });
     window.addEventListener("stepmaniaSkinLoaded", () => draw(chartTimeNow()));
     ui.sidePanelToggle.addEventListener("click", () => setSidePanelCollapsed(!state.sidePanelCollapsed));
-    ui.files.addEventListener("change", async () => {
-      await loadFiles(ui.files.files);
-      ui.files.value = "";
-    });
-    ui.folder.addEventListener("change", async () => {
-      await loadFiles(ui.folder.files);
-      ui.folder.value = "";
-    });
+    for (const input of [ui.files, ui.folder]) {
+      input.addEventListener("change", async () => {
+        const selection = Array.from(input.files);
+        input.value = "";
+        await loadFiles(selection);
+      });
+    }
     ui.select.addEventListener("change", () => selectChart(Number(ui.select.value)));
-    ui.play.addEventListener("click", () => state.playing ? pause() : play());
+    ui.play.addEventListener("click", () => state.playing || state.starting ? pause() : play());
     ui.stop.addEventListener("click", stop);
     ui.bgaBackdropToggle.addEventListener("click", () => setBgaBackdrop(!state.bgaBackdrop));
     viewButtons.forEach((button) => {
@@ -3097,10 +3278,8 @@
       if (!Number.isFinite(value)) return;
       setPlaybackRate(value);
     });
-    ui.songSpeed.addEventListener("change", restartPlaybackForAudioChange);
     ui.songSpeedValue.addEventListener("change", () => {
       ui.songSpeedValue.value = ui.songSpeed.value;
-      restartPlaybackForAudioChange();
     });
     ui.pitchWithSpeed.addEventListener("change", restartPlaybackForAudioChange);
     ui.keysounds.addEventListener("change", async () => {
@@ -3142,7 +3321,7 @@
 
       if (event.code === "Space") {
         event.preventDefault();
-        if (state.playing) pause();
+        if (state.playing || state.starting) pause();
         else await play();
         return;
       }
@@ -3184,6 +3363,7 @@
     ui.stepmaniaScrollDirection.value = "up";
 
     bindControls();
+    bindUgcSettings();
     document.documentElement.removeAttribute("data-theme");
     localStorage.removeItem("bms-player-theme");
     refreshPalette();

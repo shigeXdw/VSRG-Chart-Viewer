@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VSRG Chart Viewer</title>
-  <link rel="stylesheet" href="styles.css?v=34">
+  <link rel="stylesheet" href="styles.css?v=38">
 </head>
 <body>
   <header class="topbar">
@@ -15,11 +15,11 @@
         <small>by shigeXdw</small>
       </div>
     </a>
-    <nav class="view-tabs" aria-label="Application view">
+    <nav id="viewTabs" class="view-tabs" aria-label="Application view" hidden>
       <button class="view-tab active" type="button" data-view="player" aria-selected="true">Player</button>
       <button class="view-tab" type="button" data-view="inspector" aria-selected="false">Chart Inspector</button>
     </nav>
-    <div class="transport">
+    <div id="chartControls" class="transport" hidden>
       <div id="openMenu" class="open-menu">
         <button id="openButton" class="command" type="button" aria-haspopup="menu" aria-expanded="false">Open</button>
         <div id="openMenuPanel" class="open-menu-panel" role="menu" hidden>
@@ -33,7 +33,19 @@
     </div>
   </header>
 
-  <main id="playerView" class="workspace app-view side-collapsed">
+  <main id="startView" class="start-view">
+    <section aria-labelledby="startTitle">
+      <h1 id="startTitle">Open a chart</h1>
+      <p>Choose a folder with the chart and its media, or open individual files, ZIPs, or OSZ packs.</p>
+      <div class="start-actions">
+        <button id="startFolder" type="button">Open folder</button>
+        <button id="startFiles" type="button">Open files</button>
+      </div>
+      <p id="startStatus" role="status"></p>
+    </section>
+  </main>
+
+  <main id="playerView" class="workspace app-view side-collapsed" hidden>
     <section class="playfield-panel">
       <canvas id="playfield"></canvas>
       <div id="judgement" class="judgement">
@@ -93,6 +105,48 @@
       </div>
 
       <section class="settings">
+          <div id="ugcSettings" class="setting-group" hidden>
+            <h2>UGC</h2>
+            <label title="UGC note speed, from 1 to 20 (Sonic). Chart scroll events still apply.">
+              <span>Note speed</span>
+              <input id="ugcSpeed" type="range" min="1" max="20" value="6" step="0.25">
+              <output id="ugcSpeedValue">6.00</output>
+            </label>
+            <label class="switch-row">
+              <span>Mirror</span>
+              <input id="ugcMirror" type="checkbox">
+              <i aria-hidden="true"></i>
+            </label>
+            <label>
+              <span>Field divisions</span>
+              <select id="ugcLines" aria-label="UGC field divisions">
+                <option value="0">Off</option><option value="2">2</option><option value="4">4</option>
+                <option value="8" selected>8</option><option value="16">16</option>
+              </select>
+              <output>lanes</output>
+            </label>
+            <label>
+              <span>Line color</span>
+              <select id="ugcColor" aria-label="UGC field line color">
+                <option value="-1">Chart</option><option value="0">White</option>
+                <option value="1">Red</option><option value="2">Orange</option>
+                <option value="3">Yellow</option><option value="4">Lime</option>
+                <option value="5">Green</option><option value="6">Teal</option>
+                <option value="7">Blue</option><option value="8">Purple</option>
+              </select>
+              <output></output>
+            </label>
+            <label>
+              <span>Field scale</span>
+              <input id="ugcScale" type="range" min="50" max="100" value="100" step="5">
+              <output id="ugcScaleValue">100%</output>
+            </label>
+            <label title="Positive values draw the chart later relative to the audio. Does not change song timing.">
+              <span>Visual delay</span>
+              <input id="ugcOffset" type="range" min="-300" max="300" value="0" step="5">
+              <output id="ugcOffsetValue">0ms</output>
+            </label>
+          </div>
           <div class="setting-group">
             <h2>Scroll</h2>
             <label>
@@ -211,7 +265,7 @@
 
       </section>
 
-      <div id="status" class="status">Choose a chart folder containing VSRG files such as BMS, BME, BMSON, osu!mania, StepMania, Etterna, or UMIGURI UGC.</div>
+      <div id="status" class="status">Choose a chart folder containing VSRG files such as BMS, BME, BMSON, osu!mania, StepMania, Etterna, or UGC.</div>
     </aside>
   </main>
 
@@ -252,17 +306,22 @@
       <div><span>Notes</span><strong id="analysisNotes">0</strong></div>
       <div><span>Peak NPS</span><strong id="analysisPeak">0.0</strong></div>
       <div><span>Max chord</span><strong id="analysisChord">0</strong></div>
-      <div><span>Scratch</span><strong id="analysisScratch">0</strong></div>
+      <div><span id="analysisSpecialLabel">Scratch</span><strong id="analysisScratch">0</strong></div>
       <div><span>Long notes</span><strong id="analysisLong">0</strong></div>
       <div><span>BPM range</span><strong id="analysisBpm">--</strong></div>
     </section>
     <section class="inspector-body">
       <aside class="analysis-panel">
-        <h2>Lane distribution</h2>
+        <section id="ugcLegend" hidden>
+          <h2>Note key</h2>
+          <div class="analysis-legend" id="ugcNoteSymbols"></div>
+          <p id="ugcNoteDetail">Point to or tap a note for details.</p>
+        </section>
+        <h2 id="laneDistributionTitle">Lane distribution</h2>
         <div id="laneDistribution" class="lane-distribution"></div>
         <h2>Notes radar</h2>
         <canvas id="notesRadar" width="320" height="270"></canvas>
-        <div class="analysis-legend">
+        <div class="analysis-legend" id="keyLegend">
           <span><i class="legend-note"></i>Key</span>
           <span><i class="legend-scratch"></i>Scratch</span>
           <span><i class="legend-ln"></i>Long note</span>
@@ -290,7 +349,11 @@
   <script src="modes/osu/index.js?v=1"></script>
   <script src="assets/noteskins/ddr-night/tap-note-model-data.js?v=1"></script>
   <script src="modes/stepmania/index.js?v=38"></script>
-  <script src="modes/umiguri/index.js?v=48"></script>
-  <script src="app.js?v=89"></script>
+  <script src="modes/ugc/visuals.js?v=15"></script>
+  <script src="modes/ugc/curves.js?v=3"></script>
+  <script src="modes/ugc/surfaces.js?v=3"></script>
+  <script src="modes/ugc/renderer.js?v=24"></script>
+  <script src="modes/ugc/index.js?v=56"></script>
+  <script src="app.js?v=98"></script>
 </body>
 </html>

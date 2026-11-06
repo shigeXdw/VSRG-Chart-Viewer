@@ -32,6 +32,9 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
+/* UGC owns its in-stage HUD; other modes retain the original counter. */
+.ugc-mode .judgement { display: none; }
+
 body {
   margin: 0;
   min-width: 860px;
@@ -115,6 +118,25 @@ button { cursor: pointer; }
 button:hover:not(:disabled) { border-color: #d5ff36; }
 button:disabled { opacity: .4; cursor: default; }
 .command { padding: 0 14px; }
+
+body:has(.start-view:not([hidden])) { min-width: 0; overflow: auto; }
+.topbar:has(#viewTabs[hidden]) .brand div { display: block; }
+.start-view {
+  display: grid;
+  place-items: center;
+  min-height: calc(100dvh - 64px);
+  padding: 32px 20px;
+  text-align: center;
+}
+.start-view section { width: min(100%, 380px); }
+.start-view h1 { margin: 0; font-size: clamp(28px, 4vw, 38px); letter-spacing: -.035em; }
+.start-view p { margin: 12px 0 22px; color: var(--text-muted); font-size: 15px; line-height: 1.55; }
+.start-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.start-actions button { height: 42px; padding: 0 20px; font-weight: 600; }
+#startFolder { background: var(--accent); color: var(--page-bg); border-color: transparent; }
+#startFolder:hover { background: #9ae6ff; }
+.start-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+#startStatus { min-height: 1.55em; margin: 14px 0 0; }
 
 .open-menu {
   position: relative;
@@ -836,6 +858,9 @@ input[type="range"]::-moz-range-thumb {
 .analysis-legend .legend-ln {
   background: linear-gradient(90deg, #f3f5f6 0 50%, #377dff 50%);
 }
+#ugcNoteSymbols { margin-top: 0; gap: 3px 8px; font-size: 11px; color: var(--text); }
+#ugcNoteSymbols canvas { width: 26px; height: 18px; flex: none; background: #070a10; }
+#ugcNoteDetail { min-height: 2.7em; font-size: 12px; line-height: 1.35; margin: 8px 0 16px; }
 .analysis-legend .legend-bpm { background: #00f030; }
 
 .inspector-scroller {

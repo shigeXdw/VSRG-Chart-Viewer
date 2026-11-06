@@ -1,40 +1,37 @@
 # VSRG Chart Viewer
 
-Browser-based chart viewer for vertical scrolling rhythm game charts. It is built as a static web app and can run from GitHub Pages, a local web server, or directly from `index.html` for most workflows.
+Open a rhythm-game chart in your browser, watch it play with its audio, or inspect the notes one measure at a time. Chart files and media stay on your device.
 
-## Live Viewer
+**[Open the live viewer](https://shigexdw.github.io/VSRG-Chart-Viewer/)**
 
-[Open VSRG Chart Viewer](https://shigexdw.github.io/VSRG-Chart-Viewer/)
+## Open a chart
 
-## Supported Formats
+1. On the start screen, choose **Open folder** to load a chart with its media, or **Open files** to select individual files or a ZIP or OSZ pack. When selecting files individually, include any audio and backgrounds you want to preview. Use **Open** in the header to load another chart later.
+2. Pick a chart or difficulty from the list and press **Play**. Drag the timeline to revisit a passage, or change the song speed to study it more slowly.
+3. Switch to **Chart Inspector** for the measure grid, note density, BPM changes, chords, and lane distribution.
 
-- BMS / BME, including `#BASE 36` and `#BASE 62`
-- BMSON 1.0
-- osu!mania `.osu`, `.osz`, and regular `.zip` packs
-- StepMania / Etterna `.sm` and `.ssc`
-- UMIGURI `.ugc` V4 and V8 charts WIP
+To try a chart without any music files, download the [UGC demo chart](tests/fixtures/ugc-visual-showcase.ugc) and open it in the viewer. For local use, open `index.html` directly or serve the repository with a static web server.
 
-## Features
+## Playback modes
 
-- Autoplay chart preview with keysounds and song audio
-- BGA playback for browser-supported video formats and classic BMS image-sequence BGA
-- ZIP / OSZ loading for packed charts
-- IIDX-style Hi-Speed with green number, fixed px/sec mode, SUDDEN+, and song speed controls
-- Lane mods for BMS-style charts: Normal, Mirror, Random, R-Random, and S-Random
-- StepMania / Etterna upscroll and downscroll preview
-- KPS, peak KPS, notes radar, note progress, and BPM / green-number readouts
-- Textage-style chart inspector with note density, scratch density, BPM changes, and lane distribution
+| BMS / BME / BMSON | osu!mania |
+| --- | --- |
+| ![Seven key lanes and a wider scratch lane with the Hi-Speed and green-number readouts](docs/images/bms.png) | ![A four-key mania chart with a long note reaching the judgment line](docs/images/osu-mania.png) |
+| Load `.bms` or `.bme` charts using base 36 or base 62, or BMSON 1.0 files. Preview keysounds, scratch notes, and image-sequence or video BGA. | Open a mania `.osu` file with its audio, or load the whole `.osz` or `.zip` beatmap pack and choose a difficulty. |
 
-## Usage
+| StepMania / Etterna | UGC |
+| --- | --- |
+| ![Colored directional notes approaching four arrow receptors in upscroll](docs/images/stepmania.png) | ![A gold hold, curved blue slide and raised green AIR line on the perspective playfield](docs/images/ugc.png) |
+| Load `.sm` or `.ssc` stepcharts for dance-single or dance-double. Switch between upscroll and downscroll or adjust the spacing between columns. | Preview V4 and V8 `.ugc` charts on a 16-lane perspective field. Curved slides, AIR paths, and crush notes have dedicated artwork and hit effects. [UGC controls and known limits](docs/UGC.md) |
 
-Use the open menu to choose individual chart files, ZIP / OSZ packs, or a chart folder.
+## Playback and inspection
 
-Some media formats depend on browser codec support. WMA, WMV, and ASF are detected as unsupported by most browsers and may not play unless the browser provides codecs for them.
+- **Scroll speed and visibility.** BMS-style playback offers IIDX Hi-Speed with a green-number readout, fixed pixels per second, and SUDDEN+. UGC has its own note speed, field scale, divisions, and visual delay.
+- **Lane patterns.** BMS-style charts support Normal, Mirror, Random, R-Random, and S-Random. Use the current and peak KPS readouts or the notes radar to compare difficult passages.
+- **Measure inspection.** Jump to the current measure or let the inspector follow playback. On UGC charts, point to or tap a note to identify its type, direction, and occupied lanes. Overlapping judgments are listed together.
 
-## Notes
-
-This is a viewer and autoplay preview tool, not a playable rhythm game client. Timing, chart parsing, media support, and visual skins are implemented for inspection and preview.
+Audio and video playback depend on the codecs available in your browser. WMA, WMV, and ASF files in particular may require conversion.
 
 ## Licenses
 
-Project code is licensed under the MIT License. Third-party libraries and bundled noteskin assets keep their original licenses; see `THIRD_PARTY_NOTICES.md` and the license files in `vendor/` and `assets/noteskins/ddr-night/`.
+The viewer code is released under the [MIT License](LICENSE). Bundled libraries and noteskin artwork have their own licenses and credits. [Third-party notices](THIRD_PARTY_NOTICES.md)
