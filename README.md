@@ -1,6 +1,6 @@
 # VSRG Chart Viewer
 
-Open a rhythm-game chart in your browser, watch it play with its audio, or inspect the notes one measure at a time. Chart files and media stay on your device.
+Open a rhythm-game chart in your browser, watch it play with its audio, or inspect the notes one measure at a time.
 
 **[Open the live viewer](https://shigexdw.github.io/VSRG-Chart-Viewer/)**
 
@@ -9,8 +9,6 @@ Open a rhythm-game chart in your browser, watch it play with its audio, or inspe
 1. On the start screen, choose **Open folder** to load a chart with its media, or **Open files** to select individual files or a ZIP or OSZ pack. When selecting files individually, include any audio and backgrounds you want to preview. Use **Open** in the header to load another chart later.
 2. Pick a chart or difficulty from the list and press **Play**. Drag the timeline to revisit a passage, or change the song speed to study it more slowly.
 3. Switch to **Chart Inspector** for the measure grid, note density, BPM changes, chords, and lane distribution.
-
-To try a chart without any music files, download the [UGC demo chart](tests/fixtures/ugc-visual-showcase.ugc) and open it in the viewer. For local use, open `index.html` directly or serve the repository with a static web server.
 
 ## Playback modes
 
