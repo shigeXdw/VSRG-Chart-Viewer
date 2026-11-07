@@ -29,6 +29,7 @@ Autoplay rhythm game charts in your browser with music, keysounds and background
 - Phira (Phigros)
 - PJSK
 - ArcCreate (Arcaea)
+- DTXMania
 
 ## Development and licenses
 
