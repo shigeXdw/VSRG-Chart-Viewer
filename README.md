@@ -16,7 +16,6 @@ Autoplay rhythm game charts in your browser with music, keysounds and background
 | ![StepMania arrows approaching the receptors](docs/images/stepmania.gif) | ![Slides and AIR notes on the 16-lane field](docs/images/ugc.gif) |
 | Open dance-single or dance-double `.sm` and `.ssc` charts. XMod follows BPM changes, stops and scroll reversals. Switch between upscroll and downscroll, or use fixed-speed scrolling to read a dense passage. [Modchart guide](docs/STEPMANIA.md) | Open V4/V8 `.ugc` charts or Ched-style `.sus` charts. The 16-lane field shows curved slides, raised AIR paths and a judge line that follows their height. Select a note in the inspector to see its type, direction and lanes. [Format guide](docs/UGC.md) |
 
-Two demos are available for **Open files**. [Simai · Orbit Study](tests/fixtures/maimai/maidata.txt) or [UGC · Prism](tests/fixtures/ugc-visual-showcase.ugc).
 
 ## Roadmap
 
