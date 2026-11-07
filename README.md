@@ -19,17 +19,23 @@ Autoplay rhythm game charts in your browser with music, keysounds and background
 
 ## Roadmap
 
-- (OGKR)
-- chart support for Unnamed SDVX Clone (USC) and K-Shoot MANIA (KSM)
-- osu!standard + Catch!
-- Taiko
-- Project DIVA
-- Spin Rhythm XD
-- Quaver
-- Phira (Phigros)
-- PJSK
-- ArcCreate (Arcaea)
-- DTXMania
+✅ Done | 🟨 WIP | ❌ Not implemented yet
+
+- ✅ Majdata / Simai / AstroDX
+- 🟨 BMS / BME / BMSO (Base36, Base62)
+- ✅ Umiguri / SUSplayer
+- 🟨 StepMania / Etterna
+- 🟨 OGKR (Ongeki)
+- 🟨 Unnamed SDVX Clone (USC) / K-Shoot MANIA (KSM)
+- ❌ osu!standard + Catch!
+- ❌ Taiko
+- ❌ Project DIVA
+- ❌ Spin Rhythm XD
+- ❌ Quaver
+- ❌ Phira (Phigros)
+- ❌ PJSK
+- ❌ ArcCreate (Arcaea)
+- ❌ DTXMania
 
 ## Development and licenses
 
