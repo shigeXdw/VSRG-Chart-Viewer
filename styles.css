@@ -33,7 +33,7 @@
 [hidden] { display: none !important; }
 
 /* UGC owns its in-stage HUD; other modes retain the original counter. */
-.ugc-mode .judgement { display: none; }
+.mai-mode .judgement, .ugc-mode .judgement { display: none; }
 
 body {
   margin: 0;
@@ -128,9 +128,9 @@ body:has(.start-view:not([hidden])) { min-width: 0; overflow: auto; }
   padding: 32px 20px;
   text-align: center;
 }
-.start-view section { width: min(100%, 380px); }
+.start-view section { width: min(100%, 420px); }
 .start-view h1 { margin: 0; font-size: clamp(28px, 4vw, 38px); letter-spacing: -.035em; }
-.start-view p { margin: 12px 0 22px; color: var(--text-muted); font-size: 15px; line-height: 1.55; }
+.start-view p { max-width: 380px; margin: 12px auto 22px; color: var(--text-muted); font-size: 15px; line-height: 1.55; }
 .start-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .start-actions button { height: 42px; padding: 0 20px; font-weight: 600; }
 #startFolder { background: var(--accent); color: var(--page-bg); border-color: transparent; }
@@ -1048,3 +1048,65 @@ input[type="range"]::-moz-range-thumb {
   .settings label { grid-template-columns: 74px minmax(60px, 1fr) 46px; gap: 7px; }
   .sudden-control { grid-template-columns: 70px minmax(50px, 1fr) 46px; gap: 7px; }
 }
+
+#maiDiagnostics, #susDiagnostics, #smDiagnostics { color: var(--text-muted); font-size: 12px; }
+#maiDiagnostics summary, #susDiagnostics summary, #smDiagnostics summary { cursor: pointer; color: #f2cb83; }
+#maiDiagnostics ul, #susDiagnostics ul, #smDiagnostics ul { max-height: 12em; overflow: auto; padding-left: 1.3em; overflow-wrap: anywhere; }
+
+#maiLegend p { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+
+.mai-library-heading, .mai-library-nav, .mai-library-tools, #maiNotesForm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#maiNotesOpen { padding: 0 10px; }
+.mai-notes-logo { display: block; object-fit: contain; }
+#maiNotesToolbar { flex: none; padding: 0 7px; }
+#maiNotesToolbar .mai-notes-logo { width: 76px; height: 27px; }
+#maiNotesDialog {
+  width: min(540px, calc(100% - 24px));
+  max-height: min(680px, 85dvh);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-bg);
+  color: var(--text);
+}
+#maiNotesDialog[open] { display: flex; flex-direction: column; }
+#maiNotesDialog::backdrop { background: #0009; }
+.mai-library-heading { justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.mai-library-heading h2 { margin: 0; font-size: 18px; }
+.mai-library-body { overflow: auto; overscroll-behavior: contain; padding: 14px 16px; }
+.mai-library-nav a { margin-left: auto; color: var(--accent); }
+#maiNotesStatus { margin: 8px 0; color: var(--text-muted); }
+#maiNotesList h3 { font-size: 14px; margin: 14px 0 8px; }
+.mai-library-grid, .mai-library-diffs { display: flex; flex-wrap: wrap; gap: 6px; }
+.mai-library-grid button { min-width: 43px; }
+.mai-library-song { padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
+.mai-library-song > button { text-align: left; font-weight: 650; height: auto; background: transparent; border: 0; padding: 2px 0; }
+.mai-library-song > button:hover { color: var(--accent); }
+.mai-library-diffs { align-items: center; margin-top: 6px; }
+.mai-library-diffs small { min-width: 24px; color: var(--text-muted); }
+.mai-library-diffs button { height: 28px; min-width: 34px; padding: 0 6px; border-bottom: 2px solid var(--mai-diff, var(--border)); }
+.mai-library-direct { margin-top: 16px; }
+.mai-library-direct summary { cursor: pointer; }
+#maiNotesForm { margin-top: 8px; }
+#maiNotesDialog input { min-width: 0; width: 100%; padding: 8px; color: var(--text); background: var(--panel-deep); border: 1px solid var(--border); border-radius: 4px; }
+
+.mai-library-tools select { flex: 0 0 9.5rem; width: 9.5rem; max-width: 45%; }
+
+#maiExportPanel {
+  position: fixed; right: 16px; bottom: 16px; z-index: 100;
+  width: min(330px, calc(100vw - 16px)); padding: 12px 14px;
+  background: #161b24; color: #eaf2fa; border: 1px solid #425467; border-radius: 8px;
+  box-shadow: 0 4px 24px #0009;
+}
+#maiExportHandle { display: flex; align-items: center; gap: 8px; cursor: grab; touch-action: none; user-select: none; }
+#maiExportHandle:active { cursor: grabbing; }
+.export-grip { color: #9fadb9; }
+#maiExportPercent { margin-left: auto; font-variant-numeric: tabular-nums; }
+#maiExportProgress { display: block; width: 100%; height: 7px; margin: 10px 0; accent-color: #62d7fb; }
+.export-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+#maiExportStatus { flex: 1; overflow-wrap: anywhere; min-width: 5em; }
+#maiExportSave { color: #79dafa; }

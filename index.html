@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VSRG Chart Viewer</title>
-  <link rel="stylesheet" href="styles.css?v=38">
+  <link rel="stylesheet" href="styles.css?v=47">
 </head>
 <body>
   <header class="topbar">
@@ -20,10 +20,11 @@
       <button class="view-tab" type="button" data-view="inspector" aria-selected="false">Chart Inspector</button>
     </nav>
     <div id="chartControls" class="transport" hidden>
+      <button id="maiNotesToolbar" aria-label="Mai Notes" title="Browse Mai Notes" type="button" aria-haspopup="dialog"><img class="mai-notes-logo" src="https://mai-notes.com/image/logo.png" referrerpolicy="no-referrer" alt="" width="96" height="34" hidden><span>Mai Notes</span></button>
       <div id="openMenu" class="open-menu">
         <button id="openButton" class="command" type="button" aria-haspopup="menu" aria-expanded="false">Open</button>
         <div id="openMenuPanel" class="open-menu-panel" role="menu" hidden>
-          <button id="openFilesOption" type="button" role="menuitem">Files / ZIP</button>
+          <button id="openFilesOption" type="button" role="menuitem">Files / archives</button>
           <button id="openFolderOption" type="button" role="menuitem">Folder</button>
         </div>
       </div>
@@ -33,13 +34,44 @@
     </div>
   </header>
 
+  <dialog id="maiNotesDialog" aria-labelledby="maiNotesTitle">
+    <div class="mai-library-heading">
+      <h2 id="maiNotesTitle">Mai Notes</h2>
+      <button id="maiNotesCancel" type="button" aria-label="Close Mai Notes">Close</button>
+    </div>
+    <div class="mai-library-body">
+      <div class="mai-library-nav">
+        <button id="maiNotesBack" type="button" hidden>← Categories</button>
+        <a href="https://mai-notes.com/" target="_blank" rel="noopener noreferrer">mai-notes.com ↗</a>
+      </div>
+      <p id="maiNotesStatus" role="status"></p>
+      <div id="maiNotesTools" class="mai-library-tools" hidden>
+        <input id="maiNotesFilter" type="search" aria-label="Filter songs by title" placeholder="Filter songs by title">
+        <select id="maiNotesSort" aria-label="Song order">
+          <option value="source">Mai Notes order</option>
+          <option value="asc">Title ↑</option>
+          <option value="desc">Title ↓</option>
+        </select>
+      </div>
+      <div id="maiNotesList"></div>
+      <details class="mai-library-direct">
+        <summary>Import a player link</summary>
+        <form id="maiNotesForm">
+          <input id="maiNotesUrl" aria-label="Mai Notes chart link" type="url" placeholder="https://mai-notes.com/player/…" required autocomplete="off">
+          <button type="submit">Import</button>
+        </form>
+      </details>
+    </div>
+  </dialog>
+
   <main id="startView" class="start-view">
     <section aria-labelledby="startTitle">
       <h1 id="startTitle">Open a chart</h1>
-      <p>Choose a folder with the chart and its media, or open individual files, ZIPs, or OSZ packs.</p>
+      <p>Choose a folder with the chart and its media, or open individual files or ZIP, OSZ, and AstroDX packs.</p>
       <div class="start-actions">
         <button id="startFolder" type="button">Open folder</button>
         <button id="startFiles" type="button">Open files</button>
+        <button id="maiNotesOpen" aria-label="Mai Notes" type="button" aria-haspopup="dialog" title="Browse Mai Notes"><img class="mai-notes-logo" src="https://mai-notes.com/image/logo.png" referrerpolicy="no-referrer" alt="" width="96" height="34" hidden><span>Mai Notes</span></button>
       </div>
       <p id="startStatus" role="status"></p>
     </section>
@@ -105,8 +137,16 @@
       </div>
 
       <section class="settings">
+          <div id="maiSettings" class="setting-group" hidden>
+            <h2>maimai</h2>
+            <label class="switch-row"><span>Extra info</span><input id="maiExtraInfo" type="checkbox"><i aria-hidden="true"></i></label>
+            <label><span>Approach speed</span><input id="maiSpeed" type="range" min="1" max="10" step="0.25" value="4"><output id="maiSpeedValue" for="maiSpeed">4</output></label>
+            <button id="maiExportStart" type="button">Export MP4 · 1080p60</button>
+            <details id="maiDiagnostics" hidden><summary></summary><ul></ul></details>
+          </div>
           <div id="ugcSettings" class="setting-group" hidden>
-            <h2>UGC</h2>
+            <h2 id="ugcSettingsTitle">UGC</h2>
+            <details id="susDiagnostics" hidden><summary></summary><ul></ul></details>
             <label title="UGC note speed, from 1 to 20 (Sonic). Chart scroll events still apply.">
               <span>Note speed</span>
               <input id="ugcSpeed" type="range" min="1" max="20" value="6" step="0.25">
@@ -157,6 +197,12 @@
               </select>
               <output id="scrollModeValue" title="Green number (note visibility in milliseconds)">--</output>
             </label>
+            <label hidden title="Apply supported chart speed scripts in XMod. Fixed px/sec ignores these scripts.">
+              <span>Chart speed scripts</span>
+              <input id="stepmaniaSpeedScripts" type="checkbox" checked>
+              <output id="stepmaniaScriptStatus">SM</output>
+            </label>
+            <details id="smDiagnostics" hidden><summary>Chart diagnostics</summary><ul></ul></details>
             <label hidden>
               <span>Direction</span>
               <select id="stepmaniaScrollDirection" aria-label="StepMania scroll direction">
@@ -177,6 +223,14 @@
             </label>
           </div>
 
+          <div id="maiPlayfield" class="setting-group" hidden>
+            <h2>Playfield</h2>
+            <label><span>Background blur</span><input id="maiBlur" type="range" min="0" max="12" value="0"><output id="maiBlurValue" for="maiBlur">0px</output></label>
+            <label><span>Background darkness</span><input id="maiDarkness" type="range" min="0" max="100" value="82"><output id="maiDarknessValue" for="maiDarkness">82%</output></label>
+            <label><span>Sensor visibility</span><input id="maiSensors" type="range" min="0" max="100" value="29"><output id="maiSensorsValue" for="maiSensors">29%</output></label>
+            <label><span>Combo opacity</span><input id="maiComboOpacity" type="range" min="0" max="100" value="15"><output id="maiComboOpacityValue" for="maiComboOpacity">15%</output></label>
+            <label class="switch-row"><span>Hit effects</span><input id="maiEffects" type="checkbox"><i aria-hidden="true"></i></label>
+          </div>
           <div class="setting-group">
             <h2>Playfield</h2>
             <div class="mod-control">
@@ -265,7 +319,7 @@
 
       </section>
 
-      <div id="status" class="status">Choose a chart folder containing VSRG files such as BMS, BME, BMSON, osu!mania, StepMania, Etterna, or UGC.</div>
+      <div id="status" class="status">Choose a chart folder containing VSRG files such as BMS, BME, BMSON, osu!mania, StepMania, Etterna, UGC, or SUS.</div>
     </aside>
   </main>
 
@@ -312,6 +366,17 @@
     </section>
     <section class="inspector-body">
       <aside class="analysis-panel">
+        <section id="maiLegend" hidden>
+          <h2>maimai note key</h2>
+          <div class="analysis-legend">
+            <span><i style="background:#ff70ae"></i>Tap / hold</span>
+            <span><i style="background:#51dfed"></i>Touch</span>
+            <span><i style="background:#50baff"></i>Slide</span>
+            <span><i style="background:#ffda62"></i>Each</span>
+            <span><i style="background:#ff895b"></i>Break</span>
+          </div>
+          <p>Columns follow buttons 1–8 clockwise. Touch labels identify sensors. A white outline marks EX.</p>
+        </section>
         <section id="ugcLegend" hidden>
           <h2>Note key</h2>
           <div class="analysis-legend" id="ugcNoteSymbols"></div>
@@ -339,7 +404,13 @@
     </section>
   </main>
 
-  <input id="fileInput" type="file" accept=".bms,.bme,.bmson,.osu,.osz,.zip,.sm,.ssc,.ugc,.wav,.wave,.ogg,.oga,.opus,.mp3,.mp2,.m4a,.aac,.flac,.aif,.aiff,.weba,.caf,.wma,.mp4,.m4v,.webm,.ogv,.mov,.mpeg,.mpg,.mpe,.ts,.m2ts,.wmv,.asf,.bmp,.png,.jpg,.jpeg,.gif,.webp,application/zip,application/x-zip-compressed" multiple hidden>
+  <aside id="maiExportPanel" aria-label="Video export" hidden>
+    <div id="maiExportHandle" title="Drag to move"><span class="export-grip" aria-hidden="true">⠿</span><strong>MP4 export</strong><output id="maiExportPercent">0%</output></div>
+    <progress id="maiExportProgress" max="1" value="0" aria-label="Render progress"></progress>
+    <div class="export-actions"><span id="maiExportStatus" role="status"></span><a id="maiExportSave" hidden>Save MP4</a><button id="maiExportAction" type="button">Cancel</button></div>
+  </aside>
+
+  <input id="fileInput" type="file" accept=".bms,.bme,.bmson,.osu,.osz,.zip,.adx,.sm,.ssc,.lua,.ugc,.sus,.txt,.wav,.wave,.ogg,.oga,.opus,.mp3,.mp2,.m4a,.aac,.flac,.aif,.aiff,.weba,.caf,.wma,.mp4,.m4v,.webm,.ogv,.mov,.mpeg,.mpg,.mpe,.ts,.m2ts,.wmv,.asf,.bmp,.png,.jpg,.jpeg,.gif,.webp,application/zip,application/x-zip-compressed" multiple hidden>
   <input id="folderInput" type="file" webkitdirectory multiple hidden>
   <script src="vendor/fflate.min.js"></script>
   <script src="vendor/rosu_pp_wasm.js"></script>
@@ -348,12 +419,24 @@
   <script src="modes/bms/index.js?v=1"></script>
   <script src="modes/osu/index.js?v=1"></script>
   <script src="assets/noteskins/ddr-night/tap-note-model-data.js?v=1"></script>
-  <script src="modes/stepmania/index.js?v=38"></script>
+  <script src="modes/stepmania/scroll.js?v=1"></script>
+  <script src="modes/stepmania/index.js?v=40"></script>
+  <script src="modes/maimai/geometry.js?v=1"></script>
+  <script src="modes/maimai/parser.js?v=8"></script>
+  <script src="modes/maimai/intro.js?v=3"></script>
+  <script src="modes/maimai/export.js?v=3"></script>
+  <script src="modes/maimai/export-ui.js?v=1"></script>
+  <script src="modes/maimai/clear.js?v=3"></script>
+  <script src="modes/maimai/renderer.js?v=39"></script>
+  <script src="modes/maimai/audio.js?v=5"></script>
+  <script src="modes/maimai/index.js?v=7"></script>
+  <script src="modes/maimai/mai-notes.js?v=3"></script>
   <script src="modes/ugc/visuals.js?v=15"></script>
   <script src="modes/ugc/curves.js?v=3"></script>
   <script src="modes/ugc/surfaces.js?v=3"></script>
-  <script src="modes/ugc/renderer.js?v=24"></script>
-  <script src="modes/ugc/index.js?v=56"></script>
-  <script src="app.js?v=98"></script>
+  <script src="modes/ugc/renderer.js?v=25"></script>
+  <script src="modes/ugc/sus.js?v=1"></script>
+  <script src="modes/ugc/index.js?v=57"></script>
+  <script src="app.js?v=117"></script>
 </body>
 </html>

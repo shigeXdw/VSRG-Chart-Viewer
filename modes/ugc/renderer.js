@@ -413,14 +413,14 @@
     line(ctx, project(f, 0, -18 / WARP_DEPTH), project(f, 16, -18 / WARP_DEPTH), "rgba(239,177,63,.28)");
   }
 
-  function airJudgeQuad(f) {
-    // The guide has its own fixed world Z, independent of note scrolling.
-    const at = (x, z) => project(f, 8 + x / 64, (-z - 233 * AIR_DEPTH_PER_HEIGHT) / WARP_DEPTH, 8);
+  function airJudgeQuad(f, height = 8) {
+    // Keep the shallow guide centered at the contact depth as the AIR path rises.
+    const at = (x, z) => project(f, 8 + x / 64, (-z - 233 * AIR_DEPTH_PER_HEIGHT) / WARP_DEPTH, height);
     return [at(-900, -111), at(900, -111), at(900, -39), at(-900, -39)];
   }
 
-  function airJudgment(ctx, f, opacity) {
-    const quad = airJudgeQuad(f);
+  function airJudgment(ctx, f, height, opacity) {
+    const quad = airJudgeQuad(f, height);
     const glow = ctx.createLinearGradient(0, quad[0].y, 0, quad[3].y);
     glow.addColorStop(0, "rgba(128,255,170,0)");
     glow.addColorStop(.43, "rgba(151,255,182,.15)");
@@ -444,9 +444,9 @@
       paint.fillStyle = glow; paint.fillRect(0, 0, 2, 2);
     }
     const lane = point.x + point.width / 2;
-    // Use the center of the fixed AIR guide, including its independent depth.
+    // The spot and the center of the guide share the same projection.
     const depth = (75 - 233 * AIR_DEPTH_PER_HEIGHT) / WARP_DEPTH;
-    const center = project(f, lane, depth, 8);
+    const center = project(f, lane, depth, point.height ?? 8);
     const rx = Math.min(point.width * 64 * .35, 76) * center.scale;
     const ry = Math.max(.8, Math.min(rx * .10, 3.2 * center.scale));
     ctx.save(); ctx.globalAlpha *= opacity;
@@ -454,34 +454,42 @@
     ctx.restore();
   }
 
-  const guideRuns = new WeakMap();
-  function airGuideStrength(chart, time) {
-    const lead = .5;
-    let runs = guideRuns.get(chart);
-    if (!runs) {
-      runs = [];
-      for (const note of chart.displayNotes) {
-        if ((note.type !== "H" && note.type !== "S") || !note.longPair) continue;
-        const end = note.longPair.time, previous = runs.at(-1);
-        if (previous && note.time - previous.end <= lead) previous.end = Math.max(previous.end, end);
-        else runs.push({ start: note.time, end });
-      }
-      guideRuns.set(chart, runs);
-    }
-    let lo = 0, hi = runs.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (runs[mid].end <= time) lo = mid + 1; else hi = mid;
-    }
-    return lo < runs.length ? clamp(1 - (runs[lo].start - time) / lead, 0, 1) : 0;
-  }
-
+  const airGuidePaths = new WeakMap();
   function drawAirGuide(ctx, f, chart, time, hitEffectsEnabled) {
-    const strength = airGuideStrength(chart, time);
-    if (strength > 0) airJudgment(ctx, f, strength);
-    for (const path of chart.paths) {
-      if ((path.type !== "H" && path.type !== "S") || path.points[0].time > time || path.points.at(-1).time <= time) continue;
-      airContact(ctx, f, window.UgcCurves.sampleAtTime(path, time, chart), .9);
+    let paths = airGuidePaths.get(chart);
+    if (!paths) {
+      paths = chart.paths.filter(path => path.type === "H" || path.type === "S")
+        .map(path => ({ path, time: path.points[0].time, end: path.points.at(-1) }))
+        .sort((a, b) => a.time - b.time);
+      let latestEnd;
+      for (const entry of paths) {
+        if (!latestEnd || entry.end.time >= latestEnd.time) latestEnd = entry.end;
+        entry.latestEnd = latestEnd;
+      }
+      airGuidePaths.set(chart, paths);
+    }
+    const next = lowerBound(paths, time);
+    const contacts = [];
+    for (let i = next - 1; i >= 0 && paths[i].latestEnd.time > time; i--) {
+      if (paths[i].end.time > time) contacts.push(window.UgcCurves.sampleAtTime(paths[i].path, time, chart));
+    }
+    for (let i = next; i < paths.length && paths[i].time === time; i++) {
+      if (paths[i].end.time > time) contacts.push(paths[i].path.points[0]);
+    }
+    if (contacts.length) {
+      const heights = new Set(contacts.map(point => point.height ?? 8));
+      for (const height of heights) airJudgment(ctx, f, height, 1);
+      for (const point of contacts) airContact(ctx, f, point, .9);
+    } else if (next < paths.length && paths[next].time - time < 0.5) {
+      const upcoming = paths[next], previous = paths[next - 1]?.latestEnd;
+      let height = upcoming.path.points[0].height ?? 8;
+      let strength = 1 - (upcoming.time - time) / 0.5;
+      if (previous && upcoming.time > previous.time && upcoming.time - previous.time <= 0.5) {
+        const progress = (time - previous.time) / (upcoming.time - previous.time);
+        height = (previous.height ?? 8) * (1 - progress) + height * progress;
+        strength = 1;
+      }
+      airJudgment(ctx, f, height, strength);
     }
     if (!hitEffectsEnabled) return;
     const fade = .18;

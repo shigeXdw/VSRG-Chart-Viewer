@@ -1,6 +1,12 @@
-# UGC playback
+# UGC and SUS playback
 
 The UGC playback screen has its own perspective renderer, note artwork, animations and settings. The surrounding viewer and other formats keep their existing interface. Graphics are original Canvas artwork; game scripts, textures, characters, music and charts are not bundled.
+
+## SUS import
+
+Open a UTF-8 `.sus` file, a song folder, or a ZIP via the Open menu. A chart can reference audio, a jacket, a background image and a movie relative to its folder. The player and measure inspector share the same parsed chart.
+
+The reader supports Ched tap, EX, flick, damage, hold, slide, directional AIR and AIR-action channels. It resolves BPM references and channel-linked paths across measures, including Bézier controls and invisible steps. Numeric scroll timelines, tick resolution, measure lengths, measure bases and audio/video offsets are supported. Standard SUS AIR actions use the default AIR height. Extended visibility and inheritance commands in scroll timelines and custom note attributes produce line-numbered diagnostics. [SUS 2.7 specification](https://gist.github.com/kb10uy/c171c175ba913dc40a73c6ce69da9859) · [Ched exporter](https://github.com/paralleltree/Ched/blob/master/Ched/Components/Exporter/SusExporter.cs)
 
 ## Settings
 
@@ -22,7 +28,7 @@ These controls replace the generic lane width, note thickness and IIDX scroll co
 - Explicit `TIL` streams integrate speed over seconds, including stops and reverse motion. Missing streams remain independent. `SPDMOD` follows the observed final-segment rule and is inactive on undeclared timelines.
 - Scroll duration is `7 / speed` through speed 10, then `7 / ((speed - 10)^2 + 10)`. The field uses the observed 45-degree camera basis, 64-unit lanes and AIR height mapping, adapted to the canvas dimensions.
 - Ground SLIDE controls form Bezier curves in lane and time. Ordinary nodes split curves; AIR geometry interpolates linearly through authored points. Active ribbons clip at judgment time using elapsed seconds between prepared points.
-- Note artwork is mapped onto projected floor quads with perspective-correct texture coordinates. AIR uses a vertical mesh with directional shear, a shared rimmed chevron and a fading striped trail. The up direction mirrors the artwork vertically, and the chart selects its green or purple palette. AIR geometry moves back by 0.3125 world units per unit of elevation. Straight arrows span heights 0–233, and diagonals span 16–249. The elevated judge guide appears during active AIR holds and slides at height 233, centered 75 units behind ground judgment. Its painted glow is original viewer artwork. The field texture, judgment strip, hit rings and particle positions also use world-space projection.
+- Note artwork is mapped onto projected floor quads with perspective-correct texture coordinates. AIR uses a vertical mesh with directional shear, a shared rimmed chevron and a fading striped trail. The up direction mirrors the artwork vertically, and the chart selects its green or purple palette. AIR geometry moves back by 0.3125 world units per unit of elevation. Straight arrows span heights 0–233, and diagonals span 16–249. The elevated judge guide appears during active AIR holds and slides at the current height of each active AIR path. Its painted glow is original viewer artwork. The field texture, judgment strip, hit rings and particle positions also use world-space projection.
 - Note sprites are drawn from original viewer artwork and cached by note type, width, direction, palette and animation frame. When WebGL is available, the viewer maps the sprites and smooth ribbon textures onto GPU quads with camera-depth interpolation. The viewer times transfers from WebGL to the main canvas. Sustained slow transfers, a lost context or unavailable WebGL select Canvas projection. That path draws notes in perspective bands and uses cached tapered gradients for ribbons. A solid dark plum fills the area around the lane by default. The road has a separate device-resolution cache. Constant timelines avoid repeated timing searches.
 - AIR-CRUSH positive intervals create plates and judgments in authored tick space, including an aligned endpoint. `$` produces the head alone; zero produces a decorative path without judgments. Visible AIR-CRUSH paths use narrow center traces and retain a short elapsed-time tail after crossing the judgment line. AIR-action nodes use raised rectangular plates.
 - Each hit palette has a cached sprite sheet for rings, flashes, sparks and EX streaks. Arrow flashes and particles start on the lane beneath the arrow. AIR action and crush hits use their authored height. Raised plates, holds, slides and crush traces cast footprints across the lane and any ground notes beneath them. Flick chevrons, AIR-action streaks, rotating fragments, beams and sustain glows use world geometry. Hit and sustain animations use chart time. Pausing freezes the frame; seeking backward reproduces it. AIR-CRUSH expires after 0.25 seconds, ordinary hits after 0.5 seconds, and flick/AIR-action traces within one second.
@@ -30,7 +36,7 @@ These controls replace the generic lane width, note thickness and IIDX scroll co
 
 The playback header shows the jacket with track information. The side panel displays an image when the chart specifies a separate background. Narrow canvases move the progress card below the other two.
 
-The AIR judge line fades in over the half-second before an AIR hold or AIR slide. Paths up to half a second apart share one continuous line, which disappears on the final release. Standalone arrows trigger their hit effect on the lane.
+The AIR judge line fades in over the half-second before an AIR hold or AIR slide. Paths up to half a second apart share one continuous line, which disappears on the final release. The guide and its contact glow follow interpolated AIR height during playback and seeking. In VALLIS-NERIA MASTER the first such passage starts at 40.216 seconds. Simultaneous paths at different heights each get a guide. Standalone arrows trigger their hit effect on the lane.
 
 ## Chart inspector
 

@@ -77,6 +77,11 @@
     scratchWidthValue: $("scratchWidthValue"),
     noteThickness: $("noteThickness"),
     noteThicknessValue: $("noteThicknessValue"),
+    maiBlur: $("maiBlur"),
+    maiDarkness: $("maiDarkness"),
+    maiSensors: $("maiSensors"),
+    maiComboOpacity: $("maiComboOpacity"),
+    maiEffects: $("maiEffects"),
     bgaBlur: $("bgaBlur"),
     bgaBlurValue: $("bgaBlurValue"),
     bgaDarkness: $("bgaDarkness"),
@@ -165,7 +170,7 @@
     bgaFallbackIndex: 0,
     bgaOffset: 0,
     bgaAssets: new Map(),
-    ugcJacket: null,
+    playbackJacket: null,
     bgaBase: null,
     bgaLayer: null,
     bgaWantedBase: "",
@@ -188,6 +193,8 @@
     sidePanelCollapsed: false,
     bgaBackdrop: false,
     bgaBackdropLastUpdate: -Infinity,
+    backdropBaseSource: null,
+    backdropLayerSource: null,
     followedMeasure: -1
   };
 
@@ -832,6 +839,11 @@
       return;
     }
 
+    if (state.chart.modeId === "maimai" || state.chart.modeId === "stepmania") {
+      // Native lanes come directly from the chart and ignore BMS lane mods.
+      updateLaneArrangement();
+      return;
+    }
     for (const note of state.chart.displayNotes) note.modKey = note.channel[1];
 
     if (state.laneMod === "srandom") {
@@ -969,9 +981,10 @@
 
   function resetLoadedContent() {
     state.chart = null;
+    clearMeasureGrid();
     syncViewVisibility();
     ui.startStatus.textContent = "Opening chart…";
-    state.ugcJacket = null;
+    state.playbackJacket = null;
     stop();
     ui.select.replaceChildren();
     for (const control of [ui.select, ui.stop, ui.seek, ui.back, ui.forward]) control.disabled = true;
@@ -989,11 +1002,13 @@
   }
 
   async function loadCollectedFiles(files) {
-    const chartFiles = [...files.values()].filter((file) => PlayerModes.find(file));
-    for (const file of chartFiles) {
+    let importError = "";
+    for (const [chartPath, file] of files) {
+      if (!PlayerModes.find(file)) continue;
       if (state.files !== files) return;
       try {
         const parsed = await PlayerModes.parse(file, {
+          chartPath, files,
           decodeText,
           parseBms: parseChart,
           parseBmson,
@@ -1004,9 +1019,14 @@
         for (const chart of charts) if (chart) state.charts.push(chart);
       } catch (error) {
         console.error(file.name, error);
+        importError = file.name + " · " + error.message;
       }
     }
     if (state.files !== files) return;
+    finishChartImport(importError);
+  }
+
+  function finishChartImport(importError = "") {
     state.charts.sort((a, b) => a.name.localeCompare(b.name));
     ui.select.innerHTML = "";
     for (let index = 0; index < state.charts.length; index++) {
@@ -1024,7 +1044,7 @@
     ui.back.disabled = !state.charts.length;
     ui.forward.disabled = !state.charts.length;
     if (state.charts.length) selectChart(0);
-    else ui.startStatus.textContent = "No readable charts found. Choose another folder or file.";
+    else ui.startStatus.textContent = importError || "No readable charts found. Choose another folder or file.";
     ui.status.textContent = `${state.charts.length} chart(s), ${state.files.size} files loaded.`;
   }
 
@@ -1060,12 +1080,12 @@
     files.set(normalizePath(parts.join("/")), file);
   }
 
-  async function addZipArchive(files, file) {
+  async function addZipArchive(files, file, prefix = "") {
     const archive = fflate.unzipSync(new Uint8Array(await file.arrayBuffer()));
     for (const [path, bytes] of Object.entries(archive)) {
       if (path.endsWith("/")) continue;
       const name = path.split("/").pop();
-      files.set(normalizePath(path), new File([bytes], name || path));
+      files.set(prefix + normalizePath(path), new File([bytes], name || path));
     }
   }
 
@@ -1073,11 +1093,13 @@
     if (!fileList?.length) return;
     resetLoadedContent();
     const files = state.files;
-    for (const file of fileList) {
+    for (const [index, file] of Array.from(fileList).entries()) {
       if (state.files !== files) return;
       ui.status.textContent = `Opening ${file.name}...`;
       try {
-        if (/\.(osz|zip)$/i.test(file.name)) await addZipArchive(files, file);
+        // Multiple ADX songs can all place maidata.txt and track.ogg at their archive root.
+        if (/\.adx(?:\.zip)?$/i.test(file.name)) await addZipArchive(files, file, "adx:" + index + "/");
+        else if (/\.(osz|zip)$/i.test(file.name)) await addZipArchive(files, file);
         else addRegularFile(files, file);
       } catch (error) {
         console.error(file.name, error);
@@ -1088,13 +1110,17 @@
   }
 
   function selectChart(index) {
+    const previousSong = state.chart?.songMedia;
     stop();
     state.chart = state.charts[index];
+    state.pausedAt = -(state.chart.mode?.introDuration || 0);
     syncViewVisibility();
     if (state.view === "player") syncCanvasSize();
     ui.play.disabled = !state.chart;
-    state.buffers.clear();
-    state.stretchedBuffers.clear();
+    if (!previousSong || previousSong !== state.chart?.songMedia) {
+      state.buffers.clear();
+      state.stretchedBuffers.clear();
+    }
     state.failedAudio.clear();
     state.missingAudio.clear();
     state.hitNotes.clear();
@@ -1131,18 +1157,35 @@
     ui.notes.textContent = String(c.noteCount);
     ui.base.textContent = String(c.base);
     updateTempoDisplay(0);
-    ui.time.textContent = `00:00 / ${formatTime(playbackEndTime(c))}`;
-    ui.seek.value = "0";
+    ui.time.textContent = `${formatTime(state.pausedAt)} / ${formatTime(playbackEndTime(c))}`;
+    ui.seek.min = state.pausedAt < 0 ? String(Math.floor(state.pausedAt / playbackEndTime(c) * 1000)) : "0";
+    ui.seek.value = ui.seek.min;
     const customField = Boolean(c.mode?.drawPlayfield);
     const ugc = c.modeId === "ugc";
+    const mai = c.modeId === "maimai";
+    ui.playerView.classList.toggle("mai-mode", mai);
+    $("maiSettings").hidden = !mai;
+    $("maiPlayfield").hidden = !mai;
+    ui.bgaBlur.closest(".setting-group").hidden = mai;
+    ui.maiBlur.disabled = mai && !chartHasBga(c);
+    ui.keysounds.closest("label").querySelector("span").textContent = mai ? "Hitsounds" : "Keysounds";
+    const issues = c.diagnostics || [];
+    const diagnostics = $(ugc ? "susDiagnostics" : c.modeId === "stepmania" ? "smDiagnostics" : "maiDiagnostics");
+    $("smDiagnostics").hidden = true;
+    if (ugc) $("ugcSettingsTitle").textContent = c.format.toUpperCase();
+    diagnostics.hidden = !issues.length;
+    diagnostics.querySelector("summary").textContent = "Chart diagnostics (" + issues.length + ")";
+    diagnostics.querySelector("ul").replaceChildren(...issues.slice(0, 100).map(message => {
+      const li = document.createElement("li"); li.textContent = message; return li;
+    }));
     ui.playerView.classList.toggle("ugc-mode", ugc);
     ui.ugcSettings.hidden = !ugc;
-    ui.scrollMode.closest(".setting-group").hidden = ugc;
+    ui.scrollMode.closest(".setting-group").hidden = ugc || mai;
     for (const control of [ui.columnWidth, ui.scratchWidth, ui.sudden, ui.laneArrangement1, ui.noteThickness]) {
       const row = control.closest("label, .sudden-control, .lane-arrangement");
-      if (row) row.hidden = ugc;
+      if (row) row.hidden = ugc || mai;
     }
-    document.querySelectorAll(".mod-control, .inspector-mod-control").forEach((row) => { row.hidden = ugc; });
+    document.querySelectorAll(".mod-control, .inspector-mod-control").forEach((row) => { row.hidden = ugc || mai; });
     modButtons.forEach((button) => {
       button.disabled = customField;
     });
@@ -1153,28 +1196,34 @@
     ui.suddenAmountValue.disabled = customField || !state.suddenEnabled;
     if (ui.stepmaniaScrollDirection) {
       const stepmania = c.modeId === "stepmania";
+      $("stepmaniaSpeedScripts").closest("label").hidden = !stepmania;
+      $("stepmaniaScriptStatus").textContent = c.speedScripts?.length ? "1× preset" : "None";
+      ui.scrollMode.querySelector('[value="iidx"]').textContent = stepmania ? "XMod (BPM / chart scroll)" : "IIDX Floating Hi-Speed";
+      ui.scrollModeValue.title = stepmania ? "Beat-based scroll; chart speed scripts may override the multiplier" : "Green number (note visibility in milliseconds)";
       ui.stepmaniaScrollDirection.disabled = !stepmania;
       ui.stepmaniaScrollDirection.closest("label").hidden = !stepmania;
       ui.stepmaniaColumnSpacing.disabled = !stepmania;
       ui.stepmaniaColumnSpacing.closest("label").hidden = !stepmania;
     }
+    updateScrollControls(false);
     applyLaneMod();
-    updateNoteCounter(0);
-    updateLiveStats(0);
+    updateNoteCounter(state.pausedAt);
+    updateLiveStats(state.pausedAt);
     renderPlayerRadar();
-    renderInspector();
-    state.ugcJacket = null;
-    if (c.modeId === "ugc" && c.jacket) {
-      loadBgaAsset(c.jacket, false, true).then(asset => {
+    if (state.view === "inspector") renderInspector();
+    state.playbackJacket = null;
+    const jacketPath = c.modeId === "maimai" ? c.songMedia.cover : c.modeId === "ugc" ? c.jacket : "";
+    if (jacketPath) {
+      loadBgaAsset(jacketPath, false, true).then(asset => {
         if (state.chart !== c || asset?.kind !== "image") return;
-        state.ugcJacket = asset.source;
+        state.playbackJacket = asset.source;
         if (!state.playing) draw(state.pausedAt);
       }).catch(() => { /* The playback header also supports charts without a readable jacket. */ });
     }
     state.bgaPreloadPromise = preloadBgaAssets(c);
     updateBgaBackdropAvailability(c);
-    updateBga(0);
-    draw(0);
+    updateBga(state.pausedAt);
+    draw(state.pausedAt);
   }
 
   function bpmAt(time) {
@@ -1241,8 +1290,9 @@
   function chartTimeNow(rate = playbackSpeed()) {
     if (!state.chart) return 0;
     if (!state.playing || !state.audio) return state.pausedAt;
-    const time = (state.audio.currentTime - state.startAt) * rate;
-    return Math.max(0, time);
+    const elapsed = state.audio.currentTime - state.startAt;
+    // Before song zero the intro runs in real seconds regardless of song speed.
+    return elapsed < 0 ? Math.max(-(state.chart.mode?.introDuration || 0), elapsed) : elapsed * rate;
   }
 
   function setPlaybackRate(percent) {
@@ -1250,7 +1300,7 @@
     const previousRate = playbackSpeed();
     const endTime = playbackEndTime();
     const liveTime = state.chart
-      ? Math.max(0, Math.min(endTime - 0.01, chartTimeNow(previousRate)))
+      ? Math.max(-(state.chart.mode?.introDuration || 0), Math.min(endTime - 0.01, chartTimeNow(previousRate)))
       : chartTimeNow(previousRate);
     const clamped = clamp(Number(percent), 50, 200);
     state.playbackRate = clamped / 100;
@@ -1265,7 +1315,7 @@
   }
 
   function playbackEndTime(chart = state.chart) {
-    return Math.max(chart?.duration || 0, chart?.playbackEnd || 0);
+    return Math.max(chart?.duration || 0, chart?.playbackEnd || 0, chart?.mode?.resultEnd?.(chart) || 0);
   }
 
   function hiSpeed() {
@@ -1287,7 +1337,7 @@
     const effectiveBpm = bpmAt(time) * playbackSpeed();
     ui.bpm.textContent = formatBpm(effectiveBpm);
     if (state.chart.modeId !== "ugc" && ui.scrollMode.value === "iidx") {
-      ui.scrollModeValue.value = String(Math.round(greenNumber(time)));
+      ui.scrollModeValue.value = state.chart.modeId === "stepmania" ? "× BPM" : String(Math.round(greenNumber(time)));
     }
   }
 
@@ -1306,6 +1356,11 @@
 
   async function getAudioBuffer(object) {
     if (state.buffers.has(object)) return state.buffers.get(object);
+    const generated = state.chart.mode?.synthesizeSound?.(state.audio, object);
+    if (generated) {
+      state.buffers.set(object, generated);
+      return generated;
+    }
     const path = state.chart.wav.get(object);
     const file = path ? findFile(path, "audio") : null;
     if (!file) {
@@ -1326,11 +1381,17 @@
   async function updatePlaybackEnd() {
     const chart = state.chart;
     if (!chart || !state.audio) return;
-    const groups = ui.keysounds.checked
-      ? [chart.bgmEvents, chart.keyEvents]
-      : [chart.bgmEvents];
+    const lastCue = new Map();
+    const events = [...chart.bgmEvents];
+    if (ui.keysounds.checked) {
+      for (const event of chart.keyEvents) {
+        if (!event.maiSound) events.push(event);
+        else if (!event.loop) lastCue.set(event.object, event);
+      }
+    }
+    events.push(...lastCue.values());
     let end = chart.duration;
-    for (const event of groups.flat()) {
+    for (const event of events) {
       const buffer = await getAudioBuffer(event.object);
       if (state.chart !== chart) return;
       if (!buffer) continue;
@@ -1339,18 +1400,19 @@
       const duration = Number(event.audioDuration) > 0
         ? Math.min(Number(event.audioDuration), remaining)
         : remaining;
-      end = Math.max(end, event.time + duration);
+      end = Math.max(end, event.time + duration * (event.maiSound ? playbackSpeed() : 1));
     }
     chart.playbackEnd = end;
+    if (chart.mode?.introDuration) ui.seek.min = String(Math.floor(-chart.mode.introDuration / playbackEndTime(chart) * 1000));
   }
 
-  async function getPlaybackBuffer(object) {
+  async function getPlaybackBuffer(object, fixedPitch = false) {
     const chart = state.chart;
     const speed = playbackSpeed();
     const changesPitch = ui.pitchWithSpeed.checked;
     const buffer = await getAudioBuffer(object);
     if (state.chart !== chart || speed !== playbackSpeed() || changesPitch !== ui.pitchWithSpeed.checked) return null;
-    if (!buffer || changesPitch || Math.abs(speed - 1) < 0.001) return buffer;
+    if (!buffer || fixedPitch || changesPitch || Math.abs(speed - 1) < 0.001) return buffer;
 
     const key = `${object}:${speed.toFixed(3)}`;
     if (state.stretchedBuffers.has(key)) return state.stretchedBuffers.get(key);
@@ -1359,14 +1421,14 @@
     return promise;
   }
 
-  function stretchAudioBuffer(buffer, speed) {
+  function stretchAudioBuffer(buffer, speed, audio = state.audio) {
     // Center overlap-add windows on the timeline. Boundary windows are partial
     // instead of being discarded, so short keysounds and the final tail survive.
     const windowSize = Math.min(2048, Math.max(2, buffer.length));
     const synthesisHop = Math.max(1, Math.floor(windowSize / 4));
     const halfWindow = Math.floor(windowSize / 2);
     const outputLength = Math.max(1, Math.ceil(buffer.length / speed));
-    const output = state.audio.createBuffer(buffer.numberOfChannels, outputLength, buffer.sampleRate);
+    const output = audio.createBuffer(buffer.numberOfChannels, outputLength, buffer.sampleRate);
     const weights = new Float32Array(outputLength);
     const window = new Float32Array(windowSize);
 
@@ -1407,15 +1469,14 @@
   }
 
   async function preloadAudio(generation) {
-    const needed = [...new Set(
-      state.chart.events
-        .filter((event) =>
-          event.channel === "01" ||
-          /^[12][1-9]$/.test(event.channel) ||
-          (/^[56][1-9]$/.test(event.channel) && event.longStart)
-        )
-        .map((event) => event.object)
-    )];
+    const bySound = new Map();
+    for (const event of state.chart.events) {
+      if (event.channel === "01" || /^[12][1-9]$/.test(event.channel) ||
+          (/^[56][1-9]$/.test(event.channel) && event.longStart)) {
+        bySound.set(event.object, event);
+      }
+    }
+    const needed = Array.from(bySound.values());
     const batchSize = 24;
     ui.play.disabled = true;
     ui.play.textContent = "…";
@@ -1423,7 +1484,7 @@
     for (let start = 0; start < needed.length; start += batchSize) {
       if (generation !== state.playGeneration) return false;
       const batch = needed.slice(start, start + batchSize);
-      await Promise.all(batch.map(getPlaybackBuffer));
+      await Promise.all(batch.map(event => getPlaybackBuffer(event.object, event.maiSound)));
       if (generation !== state.playGeneration) return false;
       const loaded = Math.min(start + batch.length, needed.length);
       ui.status.textContent = `Loading audio: ${loaded} / ${needed.length}`;
@@ -1444,21 +1505,28 @@
 
   function startAudioEvent(event, buffer, generation, speed, changesPitch) {
     if (!buffer || generation !== state.playGeneration || !state.playing) return;
-    const sourceRate = changesPitch ? speed : 1;
-    const divisor = changesPitch ? 1 : speed;
+    const sourceRate = changesPitch && !event.maiSound ? speed : 1;
+    const divisor = changesPitch || event.maiSound ? 1 : speed;
     const scheduledTime = state.startAt + event.time / speed;
     const when = Math.max(state.audio.currentTime, scheduledTime);
     const elapsed = Math.max(0, when - scheduledTime) * sourceRate;
     const sourceOffset = Math.max(0, Number(event.audioOffset) || 0) / divisor;
-    const offset = sourceOffset + elapsed;
+    const offset = event.loop ? elapsed % buffer.duration : sourceOffset + elapsed;
     const duration = Number(event.audioDuration) / divisor;
-    const remaining = Math.min(buffer.duration - offset, duration > 0 ? duration - elapsed : Infinity);
+    const remaining = event.loop ? event.audioDuration / speed - elapsed
+      : Math.min(buffer.duration - offset, duration > 0 ? duration - elapsed : Infinity);
     // A late decode/seek skips elapsed audio instead of replaying it out of sync.
     if (offset < 0 || remaining <= 0) return;
     const source = state.audio.createBufferSource();
     source.buffer = buffer;
     source.playbackRate.value = sourceRate;
-    source.connect(state.gain);
+    source.loop = Boolean(event.loop);
+    if (event.maiSound && !state.maiFxGain) {
+      state.maiFxGain = state.audio.createGain();
+      state.maiFxGain.gain.value = 0.75;
+      state.maiFxGain.connect(state.gain);
+    }
+    source.connect(event.maiSound ? state.maiFxGain : state.gain);
     source.onended = () => {
       source.disconnect();
       const index = state.sources.indexOf(source);
@@ -1480,9 +1548,9 @@
       const end = upperBoundTime(events, until);
       for (let index = start; index < end; index++) {
         const event = events[index];
-        if (state.scheduled.has(event)) continue;
+        if (state.scheduled.has(event) || (event.maiSound && event.time < state.audioStartChartTime)) continue;
         state.scheduled.add(event);
-        getPlaybackBuffer(event.object).then((buffer) => {
+        getPlaybackBuffer(event.object, event.maiSound).then((buffer) => {
           startAudioEvent(event, buffer, generation, speed, changesPitch);
         });
       }
@@ -1496,10 +1564,15 @@
 
     // Reserve the whole group before the first await; the normal scheduling
     // window overlaps the seek point and must not start the same BGM twice.
+    if (ui.keysounds.checked && state.chart.sustainEvents) {
+      for (const event of state.chart.sustainEvents) {
+        if (event.time < atTime && atTime < event.time + event.audioDuration) pastBgm.unshift(event);
+      }
+    }
     const pending = pastBgm.filter((event) => !state.scheduled.has(event));
     for (const event of pending) state.scheduled.add(event);
     for (const event of pending) {
-      const buffer = await getPlaybackBuffer(event.object);
+      const buffer = await getPlaybackBuffer(event.object, event.maiSound);
       if (generation !== state.playGeneration || !state.playing) return;
       startAudioEvent(event, buffer, generation, speed, changesPitch);
     }
@@ -1519,6 +1592,7 @@
 
   async function play() {
     if (!state.chart || state.playing || state.starting) return;
+    if (state.chart.mode?.resultEnd?.(state.chart) && state.pausedAt >= playbackEndTime()) stop();
     const generation = ++state.playGeneration;
     state.starting = true;
     try {
@@ -1538,8 +1612,9 @@
       state.hitNotes.clear();
       state.effects = [];
       state.lastTime = state.pausedAt;
-      state.startAt = state.audio.currentTime - state.pausedAt / playbackSpeed();
+      state.startAt = state.audio.currentTime - state.pausedAt / (state.pausedAt < 0 ? 1 : playbackSpeed());
       const offset = state.pausedAt;
+      state.audioStartChartTime = offset;
       state.nextScheduleAt = offset;
       state.lastUiUpdate = 0;
       state.playing = true;
@@ -1572,9 +1647,9 @@
     }
   }
 
-  function pause() {
+  function pause(at = chartTimeNow()) {
     if (!state.playing && !state.starting) return;
-    state.pausedAt = chartTimeNow();
+    state.pausedAt = at;
     state.playGeneration += 1;
     stopAudioSources();
     state.playing = false;
@@ -1598,14 +1673,16 @@
     state.peakKps = 0;
     state.playing = false;
     state.starting = false;
-    state.pausedAt = 0;
+    state.pausedAt = -(state.chart?.mode?.introDuration || 0);
     cancelAnimationFrame(state.frame);
     ui.play.textContent = "▶";
     ui.play.title = "Play";
     ui.play.disabled = !state.chart;
-    updateNoteCounter(0);
-    updateLiveStats(0);
-    ui.seek.value = "0";
+    updateNoteCounter(state.pausedAt);
+    updateLiveStats(state.pausedAt);
+    ui.seek.value = ui.seek.min || "0";
+    ui.time.textContent = `${formatTime(state.pausedAt)} / ${formatTime(playbackEndTime())}`;
+    updateTempoDisplay(0);
     ui.video.pause();
     ui.video.currentTime = 0;
     ui.layerVideo.pause();
@@ -1613,7 +1690,7 @@
     state.bgaBase = null;
     state.bgaLayer = null;
     renderBgaFrame();
-    draw(0);
+    draw(state.pausedAt);
     updateInspectorCurrent();
   }
 
@@ -1621,7 +1698,19 @@
     if (!state.playing) return;
     const time = chartTimeNow();
     const endTime = playbackEndTime();
-    if (time >= endTime) { stop(); return; }
+    if (time >= endTime) {
+      if (state.chart.mode?.resultEnd?.(state.chart)) {
+        pause(endTime);
+        ui.play.title = "Replay";
+        ui.seek.value = "1000";
+        ui.time.textContent = formatTime(endTime) + " / " + formatTime(endTime);
+        ui.status.textContent = "Autoplay complete.";
+        updateNoteCounter(endTime);
+        updateLiveStats(endTime);
+        updateInspectorCurrent();
+      } else stop();
+      return;
+    }
     state.pausedAt = time;
     if (time >= state.nextScheduleAt) {
       scheduleAudioWindow(time, time + 4);
@@ -1685,6 +1774,7 @@
     const path = event ? state.chart.bmp.get(event.object) : "";
     const current = slotName === "base" ? state.bgaBase : state.bgaLayer;
     if (!path) {
+      current?.media?.pause();
       if (slotName === "base") {
         state.bgaBase = null;
         state.bgaWantedBase = "";
@@ -1704,7 +1794,8 @@
     loadBgaAsset(path, slotName === "layer", Boolean(event?.bmsonLayer)).then((asset) => {
       const wanted = slotName === "base" ? state.bgaWantedBase : state.bgaWantedLayer;
       if (!asset || wanted !== path || state.chart !== chart) return;
-      const slot = { ...asset, path, eventTime: event.time };
+      if (asset.kind !== "video") current?.media?.pause();
+      const slot = { ...asset, path, eventTime: event.time, mediaOffset: event.mediaOffset || 0 };
       if (slotName === "base") state.bgaBase = slot;
       else state.bgaLayer = slot;
       state.bgaBackdropLastUpdate = -Infinity;
@@ -1712,13 +1803,14 @@
         const media = slotName === "base" ? ui.video : ui.layerVideo;
         slot.media = media;
         media.dataset.sourcePath = path;
-        media.src = slot.url;
+        if (media.getAttribute("src") !== slot.url) media.src = slot.url;
         media.playbackRate = playbackSpeed();
         media.preservesPitch = !ui.pitchWithSpeed.checked;
-        media.currentTime = Math.max(0, time - event.time);
+        media.currentTime = Math.max(0, time - event.time + slot.mediaOffset);
         if (state.playing) media.play().catch(() => {});
       }
       renderBgaFrame();
+      if (!state.playing && chart.modeId === "maimai") draw(time);
     });
   }
 
@@ -1775,10 +1867,12 @@
 
   function syncBgaVideo(slot, time) {
     if (!slot.media) return;
-    const expected = Math.max(0, time - slot.eventTime) / playbackSpeed();
+    const elapsed = Math.max(0, time - slot.eventTime + (slot.mediaOffset || 0));
+    const end = Number.isFinite(slot.media.duration) ? slot.media.duration : Infinity;
+    const expected = Math.min(elapsed, end);
     if (Math.abs(slot.media.currentTime - expected) > 0.18) slot.media.currentTime = expected;
     slot.media.playbackRate = playbackSpeed();
-    if (state.playing && slot.media.paused) slot.media.play().catch(() => {});
+    if (state.playing && elapsed < end && slot.media.paused) slot.media.play().catch(() => {});
   }
 
   function drawBgaSource(context, width, height, source, fit = "contain") {
@@ -1821,7 +1915,10 @@
     const lowWidth = Math.max(160, Math.round(width * scale));
     const lowHeight = Math.max(120, Math.round(height * scale));
     const resized = backdropFrameCanvas.width !== Math.round(width) || backdropFrameCanvas.height !== Math.round(height);
-    const shouldRefresh = resized || frameTime - state.bgaBackdropLastUpdate >= 66;
+    const hasVideo = state.bgaBase?.kind === "video" || state.bgaLayer?.kind === "video";
+    const changed = baseSource !== state.backdropBaseSource || layerSource !== state.backdropLayerSource;
+    const dirty = state.bgaBackdropLastUpdate === -Infinity;
+    const shouldRefresh = resized || dirty || ((hasVideo || changed) && frameTime - state.bgaBackdropLastUpdate >= 66);
     if (shouldRefresh && (backdropCanvas.width !== lowWidth || backdropCanvas.height !== lowHeight)) {
       backdropCanvas.width = lowWidth;
       backdropCanvas.height = lowHeight;
@@ -1834,16 +1931,19 @@
       backdropCtx.clearRect(0, 0, lowWidth, lowHeight);
       backdropCtx.fillStyle = "#000";
       backdropCtx.fillRect(0, 0, lowWidth, lowHeight);
-      const blur = Number(ui.bgaBlur.value) || 0;
+      const mai = state.chart?.modeId === "maimai";
+      const blur = mai ? Number(ui.maiBlur.value) * scale : Number(ui.bgaBlur.value) || 0;
       backdropCtx.filter = blur > 0 ? `blur(${blur}px) saturate(1.08)` : "saturate(1.08)";
       drawBgaSource(backdropCtx, lowWidth, lowHeight, baseSource, "cover");
       drawBgaSource(backdropCtx, lowWidth, lowHeight, layerSource, "cover");
       backdropCtx.filter = "none";
       backdropFrameCtx.imageSmoothingEnabled = true;
       backdropFrameCtx.drawImage(backdropCanvas, 0, 0, width, height);
-      const darkness = Math.max(0, Math.min(0.95, Number(ui.bgaDarkness.value) / 100));
+      const darkness = Number(mai ? ui.maiDarkness.value : ui.bgaDarkness.value) / 100;
       backdropFrameCtx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
       backdropFrameCtx.fillRect(0, 0, width, height);
+      state.backdropBaseSource = baseSource;
+      state.backdropLayerSource = layerSource;
       state.bgaBackdropLastUpdate = frameTime;
     }
     ctx.imageSmoothingEnabled = true;
@@ -1854,7 +1954,8 @@
   async function seekTo(time) {
     if (!state.chart) return;
     const endTime = playbackEndTime();
-    const target = Math.max(0, Math.min(endTime - 0.01, time));
+    const resultEnd = state.chart.mode?.resultEnd?.(state.chart);
+    const target = Math.max(-(state.chart.mode?.introDuration || 0), Math.min(resultEnd ? endTime : endTime - 0.01, time));
     const resume = state.playing || state.starting;
     state.playGeneration += 1;
     cancelAnimationFrame(state.frame);
@@ -1876,7 +1977,12 @@
     state.bgaBase = null;
     state.bgaLayer = null;
     updateBga(target);
-    if (resume) await play();
+    if (resultEnd) {
+      ui.play.title = target === endTime ? "Replay" : "Play";
+      ui.play.textContent = "▶";
+      ui.play.disabled = false;
+    }
+    if (resume && target < endTime) await play();
     else draw(target);
   }
 
@@ -2083,10 +2189,23 @@
   }
 
   function registerHits(previous, time) {
-    if (!state.chart) return;
+    // The circular renderer reconstructs hit effects directly from chart time.
+    if (!state.chart || state.chart.modeId === "maimai") return;
     const notes = state.chart.hitNotes;
     const start = upperBoundTime(notes, previous);
     const end = upperBoundTime(notes, time);
+    if (state.chart.modeId === "stepmania") {
+      // One receptor per lane can flash in a frame, even on a wall of chords.
+      if (!ui.hitEffects.checked) return;
+      const lanes = new Set();
+      for (let index = end - 1; index >= start && lanes.size < state.chart.lanes; index--) {
+        const note = notes[index];
+        if (lanes.has(note.stepLane)) continue;
+        lanes.add(note.stepLane);
+        state.effects.push({ lane: note.stepLane, started: note.time });
+      }
+      return;
+    }
     for (let index = start; index < end; index++) {
       const note = notes[index];
       if (state.hitNotes.has(note)) continue;
@@ -2200,6 +2319,7 @@
 
   function isAirOrScratch(chart, note) {
     if (chart.ugc) return ["a", "H", "S", "C"].includes(note.parentType || note.type);
+    if (chart.modeId === "maimai") return Boolean(note.area);
     const lane = laneFor(note, chart.lanes);
     return chart.hasScratch !== false && (lane === 0 || (chart.lanes === 16 && lane === 15));
   }
@@ -2213,7 +2333,7 @@
       peak = Math.max(peak, right - left + 1);
     }
     const chords = new Map();
-    const laneCounts = Array(chart.lanes).fill(0);
+    const laneCounts = Array(chart.lanes + Number(chart.modeId === "maimai")).fill(0);
     let special = 0, maxChord = 0;
     for (const note of notes) {
       const key = note.beat.toFixed(6);
@@ -2221,7 +2341,8 @@
       maxChord = Math.max(maxChord, chords.get(key));
       if (chart.ugc) {
         for (let lane = Math.max(0, Math.floor(note.x)); lane < Math.min(chart.lanes, Math.ceil(note.x + note.width)); lane++) laneCounts[lane]++;
-      } else laneCounts[laneFor(note, chart.lanes)]++;
+      } else if (chart.modeId === "maimai" && note.area === "C") laneCounts[8]++;
+      else laneCounts[laneFor(note, chart.lanes)]++;
       if (isAirOrScratch(chart, note)) special++;
     }
     const bpms = chart.bpmChanges.map((change) => change.bpm).filter(Number.isFinite);
@@ -2275,9 +2396,10 @@
     ui.analysisNotes.textContent = String(chart.noteCount);
     ui.analysisPeak.textContent = analysis.peak.toFixed(1);
     ui.analysisChord.textContent = String(analysis.maxChord);
-    $("analysisSpecialLabel").textContent = chart.ugc ? "AIR hits" : "Scratch";
+    $("analysisSpecialLabel").textContent = chart.ugc ? "AIR hits" : chart.modeId === "maimai" ? "Touch" : "Scratch";
     $("laneDistributionTitle").textContent = chart.ugc ? "Hits covering each lane" : "Lane distribution";
-    $("keyLegend").hidden = !!chart.ugc;
+    $("maiLegend").hidden = chart.modeId !== "maimai";
+    $("keyLegend").hidden = !!chart.ugc || chart.modeId === "maimai";
     $("ugcLegend").hidden = !chart.ugc;
     if (chart.ugc) {
       chart.mode.inspectorLegend($("ugcNoteSymbols"));
@@ -2300,7 +2422,7 @@
       const row = document.createElement("div");
       row.className = "lane-stat";
       const label = document.createElement("span");
-      label.textContent = state.chart?.hasScratch !== false && (lane === 0 || (counts.length === 16 && lane === 15))
+      label.textContent = state.chart?.modeId === "maimai" && lane === 8 ? "C" : state.chart?.hasScratch !== false && (lane === 0 || (counts.length === 16 && lane === 15))
         ? "SC"
         : String(state.chart?.hasScratch === false ? lane + 1 : counts.length === 16 && lane >= 8 ? lane - 7 : lane);
       const meter = document.createElement("span");
@@ -2602,6 +2724,13 @@
     context.fillText("100", scaleX + 12, scaleY + 3);
   }
 
+  let measureObserver;
+  function clearMeasureGrid() {
+    measureObserver?.disconnect();
+    measureObserver = null;
+    ui.measureGrid.replaceChildren();
+  }
+
   function renderMeasureGrid(chart) {
     const measuresPerColumn = Number(ui.inspectorColumnSize.value) || 4;
     const measureCount = Math.max(1, chart.measureStarts.length - 1);
@@ -2611,7 +2740,25 @@
       const measure = Math.min(measureCount - 1, Math.max(0, authored ?? upperBoundValue(chart.measureStarts, note.beat) - 1));
       groups[measure].push(note);
     }
-    ui.measureGrid.replaceChildren();
+    clearMeasureGrid();
+    // Large charts can require gigabytes if every measure owns a full bitmap.
+    // Keep all cards navigable and allocate only the visible canvas surfaces.
+    if (measureCount > 64) {
+      measureObserver = new IntersectionObserver((entries, observer) => {
+        if (observer !== measureObserver) return;
+        for (const { target, isIntersecting } of entries) {
+          const canvas = target.firstElementChild;
+          if (!isIntersecting) {
+            if (canvas.width) canvas.width = canvas.height = 0;
+            continue;
+          }
+          const measure = Number(target.dataset.measure);
+          canvas.width = 324;
+          canvas.height = 348;
+          drawMeasure(canvas, chart, measure, groups[measure]);
+        }
+      }, { root: $("inspectorScroller"), rootMargin: "180px" });
+    }
     state.followedMeasure = -1;
     for (let start = 0; start < measureCount; start += measuresPerColumn) {
       const column = document.createElement("div");
@@ -2621,9 +2768,14 @@
         card.className = "measure-card";
         card.dataset.measure = String(measure);
         const canvas = document.createElement("canvas");
-        canvas.width = 324;
-        canvas.height = 348;
-        drawMeasure(canvas, chart, measure, groups[measure]);
+        if (measureObserver) {
+          canvas.width = canvas.height = 0;
+          measureObserver.observe(card);
+        } else {
+          canvas.width = 324;
+          canvas.height = 348;
+          drawMeasure(canvas, chart, measure, groups[measure]);
+        }
         if (chart.mode?.identifyNote) {
           const identify = event => {
             const rect = canvas.getBoundingClientRect(), mirror = ui.ugcMirror.checked;
@@ -2863,7 +3015,7 @@
     const width = state.canvasWidth, height = state.canvasHeight;
     if (state.view === "inspector" || !(width > 0 && height > 0)) return;
     const chart = state.chart;
-    const ownStage = chart?.mode?.id === "ugc";
+    const ownStage = chart?.modeId === "ugc" || chart?.modeId === "maimai";
     // The UGC stage is opaque and covers the canvas itself.
     if (!ownStage || state.bgaBackdrop) ctx.clearRect(0, 0, width, height);
     const hasBackdrop = drawPlayfieldBgaBackdrop(width, height, frameTime);
@@ -2884,10 +3036,12 @@
         hiSpeed: hiSpeed(),
         effects: state.effects,
         hitEffectsEnabled: ui.hitEffects.checked,
+        ...(chart.modeId === "maimai" ? maiFieldSettings() : {}),
         hitEffectDuration: HIT_EFFECT_DURATION,
         frameTime,
         settings: ugcSettings(),
-        jacket: state.ugcJacket,
+        maiBackground: state.bgaBase?.kind === "video" ? state.bgaBase.media : state.bgaBase?.source,
+        jacket: state.playbackJacket,
         hasBackdrop,
         laneDarkness: Number(ui.laneDarkness.value) / 100,
         noteThickness: Number(ui.noteThickness.value),
@@ -3065,13 +3219,13 @@
   }
 
   function formatTime(seconds) {
-    const value = Math.max(0, Math.floor(seconds || 0));
-    return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+    const value = Math.floor(Math.abs(seconds || 0));
+    return `${seconds < 0 ? "−" : ""}${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
   }
 
-  function updateScrollControls() {
+  function updateScrollControls(redraw = true) {
     const iidx = ui.scrollMode.value === "iidx";
-    ui.speedLabel.textContent = iidx ? "Hi-Speed" : "Scroll speed";
+    ui.speedLabel.textContent = iidx ? (state.chart?.modeId === "stepmania" ? "XMod multiplier" : "Hi-Speed") : "Scroll speed";
     if (iidx) {
       ui.speed.min = "1";
       ui.speed.max = "1999";
@@ -3093,7 +3247,7 @@
       ui.speedValue.value = String(state.fixedScrollSpeed);
       ui.scrollModeValue.value = "PX";
     }
-    draw(state.pausedAt);
+    if (redraw) draw(state.pausedAt);
   }
 
   function bindRange(input, output, suffix, onInput = () => draw(state.pausedAt)) {
@@ -3152,7 +3306,75 @@
     return Math.min(maximum, Math.max(minimum, value));
   }
 
+  function maiFieldSettings() {
+    return {
+      hitEffectsEnabled: ui.maiEffects.checked,
+      mediaBlur: Number(ui.maiBlur.value),
+      mediaDarkness: Number(ui.maiDarkness.value) / 100,
+      sensorVisibility: Number(ui.maiSensors.value) / 100,
+      comboOpacity: Number(ui.maiComboOpacity.value) / 100,
+      maiSpeed: Number($("maiSpeed").value),
+      maiExtraInfo: $("maiExtraInfo").checked
+    };
+  }
+
   function bindControls() {
+    MaiExportUI.bind(() => {
+      const chart = state.chart;
+      if (chart?.modeId !== "maimai") throw new Error("Open a maimai chart first.");
+      const media = chart.songMedia;
+      return {
+        chart, field: maiFieldSettings(), speed: playbackSpeed(), pitch: ui.pitchWithSpeed.checked,
+        hitsounds: ui.keysounds.checked, volume: Number(ui.volume.value), stretch: stretchAudioBuffer,
+        cover: media.cover && findFile(media.cover, "image"),
+        video: media.video && findFile(media.video, "video"),
+        song: media.audio && findFile(media.audio, "audio")
+      };
+    });
+    const openMaiNotes = window.MaiNotes.bind((file, chart) => {
+      resetLoadedContent();
+      state.files.set(file.name, file);
+      state.charts.push(chart);
+      finishChartImport();
+      switchView("player");
+    });
+    for (const event of ["loadeddata", "seeked"]) {
+      ui.video.addEventListener(event, () => {
+        if (!state.playing && state.chart?.modeId === "maimai") {
+          state.bgaBackdropLastUpdate = -Infinity;
+          draw(chartTimeNow());
+        }
+      });
+    }
+    for (const [input, suffix] of [[ui.maiBlur, "px"], [ui.maiDarkness, "%"], [ui.maiSensors, "%"], [ui.maiComboOpacity, "%"]]) {
+      input.value = localStorage.getItem("vsrg-" + input.id) ?? input.defaultValue;
+      const output = $(input.id + "Value");
+      output.value = input.value + suffix;
+      bindRange(input, output, suffix, () => {
+        localStorage.setItem("vsrg-" + input.id, input.value);
+        if (input === ui.maiBlur || input === ui.maiDarkness) state.bgaBackdropLastUpdate = -Infinity;
+        draw(chartTimeNow());
+      });
+    }
+    ui.maiEffects.checked = localStorage.getItem("vsrg-maiEffects") === "on";
+    ui.maiEffects.addEventListener("change", () => {
+      localStorage.setItem("vsrg-maiEffects", ui.maiEffects.checked ? "on" : "off");
+      draw(chartTimeNow());
+    });
+    const extraInfo = $("maiExtraInfo");
+    extraInfo.checked = localStorage.getItem("vsrg-maimai-extra-info") === "on";
+    extraInfo.addEventListener("change", () => {
+      localStorage.setItem("vsrg-maimai-extra-info", extraInfo.checked ? "on" : "off");
+      draw(chartTimeNow());
+    });
+    const maiSpeed = $("maiSpeed");
+    maiSpeed.value = localStorage.getItem("vsrg-maimai-speed") ?? maiSpeed.defaultValue;
+    $("maiSpeedValue").value = maiSpeed.value;
+    maiSpeed.addEventListener("input", () => {
+      $("maiSpeedValue").value = maiSpeed.value;
+      localStorage.setItem("vsrg-maimai-speed", maiSpeed.value);
+      draw(chartTimeNow());
+    });
     $("startFolder").addEventListener("click", () => ui.folder.click());
     $("startFiles").addEventListener("click", () => ui.files.click());
     const setOpenMenu = (open) => {
@@ -3163,6 +3385,8 @@
       event.stopPropagation();
       setOpenMenu(ui.openMenuPanel.hidden);
     });
+    $("maiNotesOpen").addEventListener("click", openMaiNotes);
+    $("maiNotesToolbar").addEventListener("click", openMaiNotes);
     ui.openFilesOption.addEventListener("click", () => {
       setOpenMenu(false);
       ui.files.click();
@@ -3212,6 +3436,7 @@
     });
 
     ui.scrollMode.addEventListener("change", updateScrollControls);
+    $("stepmaniaSpeedScripts").addEventListener("change", () => draw(chartTimeNow()));
     ui.stepmaniaScrollDirection.addEventListener("change", () => draw(state.pausedAt));
     ui.speed.addEventListener("input", () => {
       if (ui.scrollMode.value === "iidx") {

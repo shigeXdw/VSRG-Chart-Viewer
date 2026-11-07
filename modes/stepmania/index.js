@@ -138,53 +138,57 @@
     return pairs.length ? pairs : fallback;
   }
 
+  function upperBound(items, value, key) {
+    let low = 0, high = items.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (items[middle][key] <= value) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  }
+
   function makeTiming(bpms, stops, offset) {
-    const changes = [...bpms].sort((a, b) => a.beat - b.beat);
-    if (!changes.length || changes[0].beat > 0) changes.unshift({ beat: 0, value: 120 });
-    const stopRows = [...stops].sort((a, b) => a.beat - b.beat);
+    const changes = bpms.filter(change => change.value !== 0);
+    const firstBeat = Math.min(0, changes[0]?.beat ?? 0);
+    const beats = [...new Set([firstBeat, ...changes.map(c => c.beat),
+      ...stops.filter(stop => stop.beat >= firstBeat).map(stop => stop.beat)])].sort((a, b) => a - b);
+    const segments = [];
+    let bpm = 120, previousBeat = firstBeat, bpmIndex = 0, stopIndex = 0;
+    let signedTime = -offset, elapsed = signedTime;
+    while (stopIndex < stops.length && stops[stopIndex].beat < firstBeat) stopIndex++;
+    for (const beat of beats) {
+      // A negative BPM accumulates a time deficit. The song clock stands
+      // still across skipped beats until positive BPMs/stops repay it.
+      signedTime += (beat - previousBeat) * 60 / bpm;
+      const arrival = Math.max(elapsed, signedTime);
+      while (changes[bpmIndex]?.beat === beat) bpm = changes[bpmIndex++].value;
+      while (stops[stopIndex]?.beat === beat) signedTime += stops[stopIndex++].value;
+      elapsed = Math.max(arrival, signedTime);
+      segments.push({ beat, arrival, departure: elapsed, signedTime, bpm });
+      previousBeat = beat;
+    }
 
     function beatToSeconds(beat) {
-      let seconds = -(Number(offset) || 0);
-      let cursor = changes[0].beat;
-      let bpm = changes[0].value;
-      for (let index = 1; index < changes.length; index++) {
-        const change = changes[index];
-        if (change.beat >= beat) break;
-        seconds += (change.beat - cursor) * 60 / bpm;
-        for (const stop of stopRows) {
-          if (stop.beat > cursor && stop.beat <= change.beat) seconds += stop.value;
-        }
-        cursor = change.beat;
-        bpm = change.value;
-      }
-      seconds += (beat - cursor) * 60 / bpm;
-      for (const stop of stopRows) {
-        if (stop.beat > cursor && stop.beat <= beat) seconds += stop.value;
-      }
-      return seconds;
+      const index = upperBound(segments, beat, "beat") - 1;
+      const s = segments[Math.max(0, index)];
+      if (index < 0) return s.arrival + (beat - s.beat) * 60 / Math.abs(s.bpm);
+      if (beat === s.beat) return s.arrival;
+      return Math.max(s.departure, s.signedTime + (beat - s.beat) * 60 / s.bpm);
     }
 
     function secondsToBeat(seconds) {
-      let low = -64;
-      let high = Math.max(256, changes.at(-1).beat + 256);
-      while (beatToSeconds(high) < seconds) high *= 2;
-      for (let step = 0; step < 36; step++) {
-        const middle = (low + high) / 2;
-        if (beatToSeconds(middle) < seconds) low = middle;
-        else high = middle;
-      }
-      return (low + high) / 2;
+      const index = upperBound(segments, seconds, "arrival") - 1;
+      const s = segments[Math.max(0, index)];
+      if (index < 0) return s.beat + (seconds - s.arrival) * Math.abs(s.bpm) / 60;
+      if (seconds < s.departure || s.bpm < 0) return s.beat;
+      return s.beat + (seconds - s.signedTime) * s.bpm / 60;
     }
 
-    return {
-      beatToSeconds,
-      secondsToBeat,
-      bpmChanges: changes.map((change) => ({
-        beat: change.beat,
-        bpm: change.value,
-        time: beatToSeconds(change.beat)
-      }))
-    };
+    const bpmChanges = segments.filter((s, i) => s.bpm > 0 && s.bpm !== segments[i-1]?.bpm)
+      .map(s => ({ beat: s.beat, bpm: s.bpm, time: s.arrival }));
+    if (!bpmChanges.length) bpmChanges.push({ beat: firstBeat, bpm: 120, time: -offset });
+    return { beatToSeconds, secondsToBeat, bpmChanges };
   }
 
   function splitSmNotes(value) {
@@ -332,7 +336,8 @@
     }
     if (background) bmp.set("__background", background);
     const bgaEvents = background ? [{ beat: 0, time: 0, channel: "04", object: "__background" }] : [];
-    const measureCount = Math.max(1, Math.ceil(Math.max(0, ...rows.events.map((event) => event.beat)) / 4) + 1);
+    const lastBeat = rows.events.reduce((last, event) => Math.max(last, event.beat), 0);
+    const measureCount = Math.ceil(lastBeat / 4) + 1;
     const measureStarts = Array.from({ length: measureCount + 1 }, (_, measure) => measure * 4);
     const title = global.get?.("TITLE") || global.TITLE || name;
     const subtitle = global.get?.("SUBTITLE") || global.SUBTITLE || "";
@@ -340,8 +345,25 @@
     const difficulty = entry.DIFFICULTY || entry.difficulty || "Edit";
     const meter = String(entry.METER || entry.meter || "0").trim();
     const chartName = [title, difficulty, meter, index + 1].filter(Boolean).join(" - ");
-    const duration = Math.max(0, ...rows.events.map((event) => event.time), timing.beatToSeconds(measureStarts.at(-1)));
-    return {
+    const duration = Math.max(0, rows.events.at(-1)?.time ?? 0, timing.beatToSeconds(measureStarts.at(-1)));
+    const diagnostics = [];
+    const value = key => entry[key] ?? global.get?.(key) ?? global[key] ?? "";
+    const luaActors = [];
+    for (const key of ["FGCHANGES", "BGCHANGES", "BGCHANGES2"]) {
+      const actors = parseList(value(key)).map(row => {
+        const [beat, path] = row.split("=");
+        return { beat: Number(beat), path: path || "" };
+      }).filter(a => Number.isFinite(a.beat)).sort((a, b) => a.beat - b.beat);
+      actors.forEach((actor, i) => {
+        if (/\.lua$/i.test(actor.path)) luaActors.push({ ...actor, end: actors[i + 1]?.beat ?? Infinity });
+        else if (actor.path && actor.path !== "-nosongbg-") diagnostics.push(`Unsupported #${key} actor/media event: ${actor.path}`);
+      });
+    }
+    for (const key of ["WARPS", "DELAYS", "FAKES", "ATTACKS"]) {
+      if (value(key)) diagnostics.push(`#${key} is not yet supported; this chart may differ from StepMania.`);
+    }
+    const chart = {
+      diagnostics, luaActors,
       name: `${chartName}.sm`,
       header: {
         TITLE: subtitle ? `${title} ${subtitle}` : title,
@@ -377,6 +399,8 @@
       stepType,
       directions
     };
+    StepmaniaScroll.build(chart, value("SCROLLS"), value("SPEEDS"));
+    return chart;
   }
 
   function parseSm(text, name) {
@@ -679,13 +703,13 @@
     return true;
   }
 
-  function drawDdrNightHold(context, x, startY, endY, size, direction, snap, alpha = 0.92, textureAnchorY = startY) {
+  function drawDdrNightHold(context, x, startY, endY, size, direction, snap, alpha = 0.92, textureAnchorY = startY, viewportHeight = 1080, drawHead = true, drawCap = true) {
     const image = DDR_NIGHT_HOLD_BODIES[direction] || DDR_NIGHT_HOLD_BODIES.down;
     if (!image.complete || !image.naturalWidth) return false;
-    const tailOffset = size * 0.42;
+    const tailOffset = drawCap ? size * 0.42 : 0;
     const bodyEndY = endY >= startY ? endY - tailOffset : endY + tailOffset;
-    const bodyTop = Math.round(Math.min(startY, bodyEndY));
-    const bodyBottom = Math.round(Math.max(startY, bodyEndY));
+    const bodyTop = Math.max(-size, Math.round(Math.min(startY, bodyEndY)));
+    const bodyBottom = Math.min(viewportHeight + size, Math.round(Math.max(startY, bodyEndY)));
     const bodyHeight = Math.max(0, bodyBottom - bodyTop);
     const width = Math.round(size * 2);
     const left = Math.round(x - width / 2);
@@ -703,11 +727,12 @@
       }
       context.restore();
     }
-    drawDdrNightHoldHead(context, x, startY, size, direction, snap, alpha);
-    drawDdrNightHoldCap(context, x, endY, size, direction, alpha);
+    if (drawHead) drawDdrNightHoldHead(context, x, startY, size, direction, snap, alpha);
+    if (drawCap) drawDdrNightHoldCap(context, x, endY, size, direction, alpha);
     return true;
   }
 
+  let denseField;
   function drawPlayfield({ context, chart, time, width, height, speed, scrollMode, fixedScrollSpeed, hiSpeed, effects = [], hitEffectsEnabled = true, hitEffectDuration = 0.36 }) {
     const directionControl = document.getElementById("stepmaniaScrollDirection");
     const downscroll = directionControl?.value === "down";
@@ -727,24 +752,54 @@
     const pxPerSecond = scrollMode === "fixed"
       ? Math.max(50, Number(fixedScrollSpeed) || 720)
       : Math.max(180, Number(hiSpeed ?? speed) * 360);
-    const visibleAhead = height / pxPerSecond + 0.5;
     const scrollSign = downscroll ? -1 : 1;
+    const frame = StepmaniaScroll.frame(chart, time, {
+      fixed: scrollMode === "fixed", pixelsPerSecond: pxPerSecond,
+      pixelsPerBeat: arrowSize * 2,
+      xmod: Math.max(0.01, Number(hiSpeed ?? speed) || 2),
+      scripts: document.getElementById("stepmaniaSpeedScripts")?.checked !== false,
+      extent: height + arrowSize * 2
+    });
+    const { begin, end } = frame;
+    // Limit overdraw when thousands of arrows overlap within a single screen.
+    // Normal density retains every head; the overview only merges nearby
+    // heads in the same lane. All judgments still use the full note list.
+    const dense = end - begin > laneCount * height / 2;
+    const rowHeight = dense ? Math.max(1, arrowSize / 5) : 1;
+    const lastShortHold = Array(laneCount).fill(-Infinity);
+    const output = context;
+    if (dense) {
+      // Software canvas backends otherwise blend hundreds of overlapping,
+      // almost fully occluded sprites at full display resolution each frame.
+      denseField ??= document.createElement("canvas");
+      const w = Math.ceil(width / 3), h = Math.ceil(height / 3);
+      if (denseField.width !== w || denseField.height !== h) {
+        denseField.width = w;
+        denseField.height = h;
+      }
+      context = denseField.getContext("2d", { alpha: false });
+      context.setTransform(w / width, 0, 0, h / height, 0, 0);
+    }
 
     context.fillStyle = "#050607";
     context.fillRect(0, 0, width, height);
 
-    for (const note of chart.longNotes) {
-      if (!note.longStart || !note.longPair) continue;
-      if (note.longPair.time <= time || note.time > time + visibleAhead) continue;
-      const startDelta = note.time - time;
-      const endDelta = note.longPair.time - time;
-      const rawStartY = receptorY + scrollSign * startDelta * pxPerSecond;
-      const startY = startDelta > 0 ? rawStartY : receptorY;
-      const endY = receptorY + scrollSign * endDelta * pxPerSecond;
+    const holds = scrollMode === "fixed" ? chart.scroll.fixedHolds : chart.scroll.holdPieces;
+    for (const piece of holds) {
+      const note = piece.head;
+      if (piece.end.time <= time || note.longPair.time <= time) continue;
+      const rawStartY = receptorY + scrollSign * frame.offset(piece.start);
+      const startY = piece.start.time > time ? rawStartY : receptorY;
+      const endY = receptorY + scrollSign * frame.offset(piece.end);
       if (Math.max(startY, endY) < -arrowSize || Math.min(startY, endY) > height + arrowSize) continue;
       const x = laneX(note.stepLane);
+      if (dense && Math.abs(endY - startY) < rowHeight) {
+        const row = Math.floor(startY / rowHeight);
+        if (lastShortHold[note.stepLane] === row) continue;
+        lastShortHold[note.stepLane] = row;
+      }
       const bodyWidth = arrowSize * 2;
-      if (!drawDdrNightHold(context, x, startY, endY, arrowSize, note.direction, note.snapIndex || 0, note.roll ? 0.82 : 0.9, rawStartY)) {
+      if (!drawDdrNightHold(context, x, startY, endY, arrowSize, note.direction, note.snapIndex || 0, note.roll ? 0.82 : 0.9, rawStartY, height, piece.start === note || piece.start.time <= time, piece.end === note.longPair)) {
         const top = Math.min(startY, endY);
         const bottom = Math.max(startY, endY);
         const bodyGradient = context.createLinearGradient(0, top, 0, bottom);
@@ -764,38 +819,45 @@
       drawDdrNightReceptor(context, x, receptorY, arrowSize, chart.directions[lane], beat, 0.72);
     }
     if (hitEffectsEnabled) {
-      for (const effect of effects) {
-        const lane = effect.lane;
+      const litLanes = new Set();
+      for (let i = effects.length - 1; i >= 0; i--) {
+        const effect = effects[i], lane = effect.lane;
+        if (dense && litLanes.has(lane)) continue;
         if (lane < 0 || lane >= laneCount) continue;
         const age = time - effect.started;
         if (age < 0 || age > hitEffectDuration) continue;
+        if (dense) litLanes.add(lane);
         const x = laneX(lane);
         drawDdrNightHitFlash(context, x, receptorY, arrowSize, chart.directions[lane], DDR_NIGHT_HIT_FLASH_COLOR, age, hitEffectDuration);
       }
     }
 
-    const startIndex = chart.displayNotes.findIndex((note) => note.time > time);
-    const begin = startIndex < 0 ? chart.displayNotes.length : Math.max(0, startIndex - 16);
-    for (let index = begin; index < chart.displayNotes.length; index++) {
-      const note = chart.displayNotes[index];
-      if (note.time > time + visibleAhead) break;
+    const lastPixel = Array(laneCount).fill(-Infinity);
+    for (let index = begin; index < end; index++) {
+      const note = frame.notes[index];
       const delta = note.time - time;
       if (delta <= 0) continue;
-      const y = receptorY + scrollSign * delta * pxPerSecond;
+      const y = receptorY + scrollSign * frame.offset(note);
       if (y < -arrowSize * 2 || y > height + arrowSize * 2) continue;
+      const pixel = Math.round(y / rowHeight);
+      if (lastPixel[note.stepLane] === pixel) continue;
+      lastPixel[note.stepLane] = pixel;
       const x = laneX(note.stepLane);
       drawDdrNightNote(context, x, y, arrowSize, note.direction, note.snapColor, note.snapIndex || 0, 0.98);
     }
+    if (dense) output.drawImage(denseField, 0, 0, width, height);
   }
 
   PlayerModes.register({
     id: "stepmania",
     name: "StepMania / Etterna",
     detect: (file) => /\.(sm|ssc)$/i.test(file.name),
-    async parse(file) {
+    async parse(file, context) {
       await preloadDdrNightTapSkin();
       const text = await file.text();
-      return /\.ssc$/i.test(file.name) ? parseSsc(text, file.name) : parseSm(text, file.name);
+      const charts = /\.ssc$/i.test(file.name) ? parseSsc(text, file.name) : parseSm(text, file.name);
+      await StepmaniaScroll.attachScripts(charts, context);
+      return charts;
     },
     drawPlayfield,
     selectLabel(chart) {

@@ -48,7 +48,6 @@
   function parseUgc(text, name) {
     const headers = {}, flags = { SOFFSET: true, CLICK: true, HIPRECISION: false }, warnings = [];
     const bpmRows = [], beatRows = [], timelineRows = [], noteSpeedRows = [], rawNotes = [];
-    const explicitClicks = [];
     let currentLong = null, currentTimeline = 0, maximumBar = 0;
     const validPosition = (value) => /^\d+'\d+$/.test(value || "")
       && value.split("'").every((part) => Number.isSafeInteger(Number(part)));
@@ -118,6 +117,13 @@
       }
     }
 
+    return buildFieldChart(name, { format: "ugc", base: "UGC v" + version, headers, flags, warnings, resolution, bpmRows, beatRows,
+      timelineRows, noteSpeedRows, rawNotes, maximumBar });
+  }
+
+  function buildFieldChart(name, { format, base, headers, flags, warnings, resolution, bpmRows, beatRows,
+    timelineRows, noteSpeedRows, rawNotes, maximumBar }) {
+    const explicitClicks = [];
     const signatures = new Map([[0, [4, 4]]]);
     for (const row of beatRows) signatures.set(row.bar, [row.numerator, row.denominator]);
     const measureTicks = [0];
@@ -279,7 +285,10 @@
           if (Number.isSafeInteger(interval) && interval > 0) {
             const requested = Math.floor((parent.longPair.tick - tick) / interval);
             const count = Math.min(requested, maximumGeneratedCrushTicks - generatedCrushTicks);
-            if (count < requested) warn("AIR-CRUSH generated ticks limited to 250000 per chart.");
+            if (count < requested) {
+              const message = "AIR-CRUSH generated ticks limited to 250000 per chart.";
+              if (!warnings.includes(message)) warnings.push(message);
+            }
             let segment = 1;
             for (let index = 1; index <= count; index++) {
               const tickPosition = tick + index * interval;
@@ -325,12 +334,12 @@
     }
     const difficultyIndex = Math.max(0, Math.min(5, Math.floor(Number(headers.DIFF) || 0))), style = DIFFICULTIES[difficultyIndex];
     return {
-      name, format: "ugc", jacket: headers.JACKET || "", header: {
+      name, format, jacket: headers.JACKET || "", header: {
         TITLE: headers.TITLE || name, ARTIST: headers.ARTIST || "", SUBARTIST: headers.DESIGN ? `charted by ${headers.DESIGN}` : "",
         GENRE: headers.GENRE || "UGC", PLAYLEVEL: headers.LEVEL || headers.CONST || "--", BPM: String(firstBpm),
         DIFFICULTY: String(difficultyIndex), UGC_DIFFICULTY: style[0], UGC_COLOR: style[1]
       },
-      base: "UGC v" + version, resolution: resolution, mainTimeline, leadInSeconds, flags, warnings,
+      base, resolution, mainTimeline, leadInSeconds, flags, warnings,
       fieldColor: Number.isFinite(Number(headers.FLDCOL)) ? Number(headers.FLDCOL) : -1,
       wav, bmp, events: [...notes, ...bgmEvents], playable: notes, longNotes: notes.filter((note) => note.longStart), paths,
       bpmChanges: bpmChanges.map((change) => ({ ...change, beat: change.tick / resolution })),
@@ -544,9 +553,22 @@
   PlayerModes.register({
     id: "ugc",
     name: "UGC",
-    detect: (file) => /\.ugc$/i.test(file.name),
-    async parse(file) {
-      return parseUgc(await file.text(), file.name);
+    detect: (file) => /\.(ugc|sus)$/i.test(file.name),
+    async parse(file, context) {
+      const text = await file.text();
+      if (/\.sus$/i.test(file.name)) {
+        const source = window.SusChart.read(text, context?.chartPath || file.name);
+        const chart = buildFieldChart(file.name, source);
+        chart.diagnostics = source.warnings;
+        if (source.difficultyLabel) chart.header.UGC_DIFFICULTY = source.difficultyLabel;
+        if (source.movie) {
+          chart.bmp.set("sus-movie", source.movie);
+          chart.bgaEvents.push({ time: Math.max(0, source.movieOffset), mediaOffset: Math.max(0, -source.movieOffset),
+            object: "sus-movie", channel: "04" });
+        }
+        return chart;
+      }
+      return parseUgc(text, file.name);
     },
     drawPlayfield: (options) => window.UgcRenderer.draw(options),
     scrollDuration: (speed) => window.UgcRenderer.scrollDuration(speed),
@@ -558,7 +580,7 @@
       return [chart.header.UGC_DIFFICULTY, chart.header.UGC_COLOR];
     },
     inspectorSubtitle(chart, artist) {
-      return `${artist} · UGC · 16-unit field · ${chart.measureStarts.length - 1} measures`;
+      return `${artist} · ${chart.format.toUpperCase()} · 16-unit field · ${chart.measureStarts.length - 1} measures`;
     }
   });
 })();
