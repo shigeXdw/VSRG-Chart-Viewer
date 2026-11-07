@@ -21,9 +21,14 @@ Autoplay rhythm game charts in your browser with music, keysounds and background
 
 - (OGKR)
 - chart support for Unnamed SDVX Clone (USC) and K-Shoot MANIA (KSM)
-- osu!standard
+- osu!standard + Catch!
 - Taiko
 - Project DIVA
+- Spin Rhythm XD
+- Quaver
+- Phira (Phigros)
+- PJSK
+- ArcCreate (Arcaea)
 
 ## Development and licenses
 
