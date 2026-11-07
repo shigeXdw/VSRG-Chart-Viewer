@@ -21,19 +21,19 @@ Autoplay rhythm game charts in your browser with music, keysounds and background
 
 ✅ Done | 🟨 WIP | ❌ Not implemented yet
 
-- ✅ Majdata / Simai / AstroDX
-- 🟨 BMS / BME / BMSO (Base36, Base62)
-- ✅ Umiguri / SUSplayer
+- ✅ Majdata / Simai / AstroDX (maimai)
+- 🟨 BMS / BME / BMSON (Base36, Base62) (IIDX)
+- ✅ Umiguri / SUSplayer (Chunithm)
 - 🟨 StepMania / Etterna
 - 🟨 OGKR (Ongeki)
-- 🟨 Unnamed SDVX Clone (USC) / K-Shoot MANIA (KSM)
+- 🟨 Unnamed SDVX Clone (USC) / K-Shoot MANIA (KSM) (Sound Voltex)
 - ❌ osu!standard + Catch!
 - ❌ Taiko
 - ❌ Project DIVA
 - ❌ Spin Rhythm XD
 - ❌ Quaver
 - ❌ Phira (Phigros)
-- ❌ PJSK
+- ❌ PJSK (Project Sekai)
 - ❌ ArcCreate (Arcaea)
 - ❌ DTXMania
 
