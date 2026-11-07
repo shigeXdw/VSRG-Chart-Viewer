@@ -19,8 +19,8 @@ Autoplay rhythm game charts in your browser with music, keysounds and background
 
 ## Roadmap
 
-- ONGEKI (OGKR)
-- SOUND VOLTEX charts for Unnamed SDVX Clone (USC) and K-Shoot MANIA (KSM)
+- (OGKR)
+- chart support for Unnamed SDVX Clone (USC) and K-Shoot MANIA (KSM)
 - osu!standard
 - Taiko
 - Project DIVA
