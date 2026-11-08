@@ -25,7 +25,7 @@ Autoplay rhythm game charts in your browser with music, keysounds and background
 - 🟨 BMS / BME / BMSON (Base36, Base62) (IIDX)
 - ✅ Umiguri / SUSplayer (Chunithm)
 - 🟨 StepMania / Etterna
-- ⬜ OGKR (Ongeki)
+- ⬜ SaGEKI (Ongeki)
 - ⬜ Unnamed SDVX Clone (USC) / K-Shoot MANIA (KSM) (Sound Voltex)
 - ❌ osu!standard + Catch!
 - ❌ Taiko
