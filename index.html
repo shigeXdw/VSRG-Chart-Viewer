@@ -4,7 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VSRG Chart Viewer</title>
-  <link rel="stylesheet" href="styles.css?v=47">
+  <link rel="stylesheet" href="styles.css?v=49">
+  <link rel="stylesheet" href="modes/maimai/machine.css?v=12">
+  <link rel="stylesheet" href="assets/maimai-ui/themes.css?v=1">
+  <link rel="stylesheet" href="modes/maimai/machine-sprites.css?v=4">
 </head>
 <body>
   <header class="topbar">
@@ -73,6 +76,7 @@
         <button id="startFiles" type="button">Open files</button>
         <button id="maiNotesOpen" aria-label="Mai Notes" type="button" aria-haspopup="dialog" title="Browse Mai Notes"><img class="mai-notes-logo" src="https://mai-notes.com/image/logo.png" referrerpolicy="no-referrer" alt="" width="96" height="34" hidden><span>Mai Notes</span></button>
       </div>
+      <label class="machine-start-option"><input id="maiMachineStartSetting" type="checkbox"> Machine mode <small>maimai</small></label>
       <p id="startStatus" role="status"></p>
     </section>
   </main>
@@ -80,6 +84,35 @@
   <main id="playerView" class="workspace app-view side-collapsed" hidden>
     <section class="playfield-panel">
       <canvas id="playfield"></canvas>
+      <section id="maiMachine" hidden aria-label="maimai machine">
+        <div class="machine-shell" tabindex="-1">
+          <canvas id="machineBloom" width="160" height="245" aria-hidden="true"></canvas>
+          <div class="machine-marquee"><div class="machine-monitor">
+            <div class="machine-cover machine-monitor-art" aria-hidden="true"></div>
+            <div class="machine-monitor-ribbon"><span>CHART VIEWER</span><small id="machineMonitorPhase"></small></div>
+            <div class="machine-cover machine-monitor-cover"></div>
+            <div class="machine-monitor-copy"><strong id="machineMonitorDifficulty"></strong><span id="machineMonitorLevel"></span><strong id="machineTitle"></strong><span id="machineMonitorDetail"></span></div>
+            <div class="machine-monitor-score"><small id="machineValueLabel"></small><strong id="machineValue"></strong></div>
+            <div class="machine-monitor-combo"><small>MAX COMBO</small><strong id="machineMaxCombo">0</strong></div>
+            <div id="machineSummary" aria-label="Autoplay judgments by note type" hidden></div>
+          </div></div>
+          <div class="machine-ring">
+            <div class="machine-glass">
+              <div id="machineMenu" class="machine-menu">
+                <h2 id="machineHeading"></h2>
+                <div class="machine-instruction">Select a difficulty with the illuminated buttons</div>
+                <div id="machineCards" class="machine-cards"></div>
+                <div id="machineSettingsPanel" class="machine-settings-panel" hidden></div>
+                <div class="machine-nav machine-left" aria-hidden="true">◀</div><div class="machine-nav machine-right" aria-hidden="true">▶</div>
+                <div id="machineChoice" class="machine-choice" role="status"></div>
+                <div class="machine-actions"><span id="machineBack"></span><span id="machineNext"></span></div>
+              </div>
+            </div>
+            <div id="machineButtons" class="machine-buttons" role="group" aria-label="Cabinet buttons, clockwise from the upper right"></div>
+          </div>
+          <div class="machine-emblem" aria-hidden="true">DX</div>
+        </div>
+      </section>
       <div id="judgement" class="judgement">
         <strong id="judgeText">0000 / 0000</strong>
       </div>
@@ -139,10 +172,31 @@
       <section class="settings">
           <div id="maiSettings" class="setting-group" hidden>
             <h2>maimai</h2>
+            <label class="switch-row"><span>Machine mode</span><input id="maiMachineSetting" type="checkbox"><i aria-hidden="true"></i></label>
             <label class="switch-row"><span>Extra info</span><input id="maiExtraInfo" type="checkbox"><i aria-hidden="true"></i></label>
             <label><span>Approach speed</span><input id="maiSpeed" type="range" min="1" max="10" step="0.25" value="4"><output id="maiSpeedValue" for="maiSpeed">4</output></label>
+            <label><span>Export camera</span><select id="maiExportCamera">
+              <option value="auto">Current mode · automatic</option>
+              <option value="flat">Playfield · landscape</option>
+              <optgroup label="Machine · 1080 × 1920 portrait">
+                <option value="left">Left angle (B)</option><option value="right">Right angle</option><option value="center">Centered station</option>
+              </optgroup>
+              <optgroup label="Machine · 1920 × 1080 landscape">
+                <option value="both">Both centered</option><option value="angled">Both angled</option>
+              </optgroup>
+            </select></label>
             <button id="maiExportStart" type="button">Export MP4 · 1080p60</button>
             <details id="maiDiagnostics" hidden><summary></summary><ul></ul></details>
+          </div>
+          <div id="kshSettings" class="setting-group" hidden>
+            <h2>SOUND VOLTEX</h2>
+            <label><span>Scroll speed</span><input id="kshSpeed" type="range" min="1" max="12" value="4" step="0.25"><output id="kshSpeedValue" for="kshSpeed">4</output></label>
+            <label class="switch-row"><span>Camera effects</span><input id="kshCamera" type="checkbox" checked><i aria-hidden="true"></i></label>
+            <label class="switch-row"><span>Audio effects</span><input id="kshFx" type="checkbox" checked><i aria-hidden="true"></i></label>
+            <div class="ksh-skin-actions"><button type="button" id="kshSkinLoad">Load skin folder</button><button type="button" id="kshSkinReset" hidden>Use standalone</button></div>
+            <small id="kshSkinStatus" role="status">Standalone</small>
+            <input id="kshSkinInput" type="file" webkitdirectory multiple hidden>
+            <details id="kshDiagnostics" hidden><summary></summary><ul></ul></details>
           </div>
           <div id="ugcSettings" class="setting-group" hidden>
             <h2 id="ugcSettingsTitle">UGC</h2>
@@ -319,7 +373,7 @@
 
       </section>
 
-      <div id="status" class="status">Choose a chart folder containing VSRG files such as BMS, BME, BMSON, osu!mania, StepMania, Etterna, UGC, or SUS.</div>
+      <div id="status" class="status">Choose a chart folder containing VSRG files such as BMS, BME, BMSON, osu!mania, StepMania, Etterna, KSH, UGC, or SUS.</div>
     </aside>
   </main>
 
@@ -377,6 +431,14 @@
           </div>
           <p>Columns follow buttons 1–8 clockwise. Touch labels identify sensors. A white outline marks EX.</p>
         </section>
+        <section id="kshLegend" hidden>
+          <h2>Note key</h2>
+          <div class="analysis-legend">
+            <span><i style="background:#e8f5ff"></i>BT A–D</span><span><i style="background:#ffac37"></i>FX L / R</span>
+            <span><i style="background:#37ddff"></i>Left laser</span><span><i style="background:#ff59af"></i>Right laser</span>
+          </div>
+          <p>Horizontal laser segments are slams. FX buttons each span two BT lanes.</p>
+        </section>
         <section id="ugcLegend" hidden>
           <h2>Note key</h2>
           <div class="analysis-legend" id="ugcNoteSymbols"></div>
@@ -410,33 +472,45 @@
     <div class="export-actions"><span id="maiExportStatus" role="status"></span><a id="maiExportSave" hidden>Save MP4</a><button id="maiExportAction" type="button">Cancel</button></div>
   </aside>
 
-  <input id="fileInput" type="file" accept=".bms,.bme,.bmson,.osu,.osz,.zip,.adx,.sm,.ssc,.lua,.ugc,.sus,.txt,.wav,.wave,.ogg,.oga,.opus,.mp3,.mp2,.m4a,.aac,.flac,.aif,.aiff,.weba,.caf,.wma,.mp4,.m4v,.webm,.ogv,.mov,.mpeg,.mpg,.mpe,.ts,.m2ts,.wmv,.asf,.bmp,.png,.jpg,.jpeg,.gif,.webp,application/zip,application/x-zip-compressed" multiple hidden>
+  <input id="fileInput" type="file" accept=".bms,.bme,.bml,.bmson,.osu,.osz,.zip,.adx,.sm,.ssc,.ksh,.lua,.ugc,.sus,.txt,.wav,.wave,.ogg,.oga,.opus,.mp3,.mp2,.m4a,.aac,.flac,.aif,.aiff,.weba,.caf,.wma,.mp4,.m4v,.webm,.ogv,.mov,.mpeg,.mpg,.mpe,.ts,.m2ts,.wmv,.asf,.bmp,.png,.jpg,.jpeg,.gif,.webp,application/zip,application/x-zip-compressed" multiple hidden>
   <input id="folderInput" type="file" webkitdirectory multiple hidden>
   <script src="vendor/fflate.min.js"></script>
   <script src="vendor/rosu_pp_wasm.js"></script>
   <script src="vendor/rosu_pp_classic.js"></script>
   <script src="modes/registry.js?v=2"></script>
-  <script src="modes/bms/index.js?v=1"></script>
+  <script src="modes/bms/parser.js?v=1"></script>
+  <script src="modes/bms/index.js?v=2"></script>
   <script src="modes/osu/index.js?v=1"></script>
   <script src="assets/noteskins/ddr-night/tap-note-model-data.js?v=1"></script>
+  <script src="modes/sdvx/parser.js?v=2"></script>
+  <script src="modes/sdvx/skins.js?v=2"></script>
+  <script src="modes/sdvx/stage.js?v=2"></script>
+  <script src="modes/sdvx/motion.js?v=1"></script>
+  <script src="modes/sdvx/field.js?v=3"></script>
+  <script src="modes/sdvx/audio.js?v=1"></script>
+  <script src="modes/sdvx/index.js?v=2"></script>
   <script src="modes/stepmania/scroll.js?v=1"></script>
   <script src="modes/stepmania/index.js?v=40"></script>
   <script src="modes/maimai/geometry.js?v=1"></script>
   <script src="modes/maimai/parser.js?v=8"></script>
   <script src="modes/maimai/intro.js?v=3"></script>
-  <script src="modes/maimai/export.js?v=3"></script>
-  <script src="modes/maimai/export-ui.js?v=1"></script>
-  <script src="modes/maimai/clear.js?v=3"></script>
-  <script src="modes/maimai/renderer.js?v=39"></script>
+  <script src="modes/maimai/machine-export.js?v=2"></script>
+  <script src="modes/maimai/export.js?v=5"></script>
+  <script src="modes/maimai/export-ui.js?v=2"></script>
+  <script src="modes/maimai/clear.js?v=4"></script>
+  <script src="modes/maimai/cabinet.js?v=28"></script>
+  <script src="modes/maimai/machine-settings.js?v=2"></script>
+  <script src="modes/maimai/machine.js?v=17"></script>
+  <script src="modes/maimai/renderer.js?v=41"></script>
   <script src="modes/maimai/audio.js?v=5"></script>
-  <script src="modes/maimai/index.js?v=7"></script>
+  <script src="modes/maimai/index.js?v=8"></script>
   <script src="modes/maimai/mai-notes.js?v=3"></script>
   <script src="modes/ugc/visuals.js?v=15"></script>
   <script src="modes/ugc/curves.js?v=3"></script>
   <script src="modes/ugc/surfaces.js?v=3"></script>
-  <script src="modes/ugc/renderer.js?v=25"></script>
+  <script src="modes/ugc/renderer.js?v=26"></script>
   <script src="modes/ugc/sus.js?v=1"></script>
   <script src="modes/ugc/index.js?v=57"></script>
-  <script src="app.js?v=117"></script>
+  <script src="app.js?v=124"></script>
 </body>
 </html>

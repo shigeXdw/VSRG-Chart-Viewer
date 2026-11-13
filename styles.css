@@ -1049,9 +1049,9 @@ input[type="range"]::-moz-range-thumb {
   .sudden-control { grid-template-columns: 70px minmax(50px, 1fr) 46px; gap: 7px; }
 }
 
-#maiDiagnostics, #susDiagnostics, #smDiagnostics { color: var(--text-muted); font-size: 12px; }
-#maiDiagnostics summary, #susDiagnostics summary, #smDiagnostics summary { cursor: pointer; color: #f2cb83; }
-#maiDiagnostics ul, #susDiagnostics ul, #smDiagnostics ul { max-height: 12em; overflow: auto; padding-left: 1.3em; overflow-wrap: anywhere; }
+#maiDiagnostics, #susDiagnostics, #smDiagnostics, #kshDiagnostics { color: var(--text-muted); font-size: 12px; }
+#maiDiagnostics summary, #susDiagnostics summary, #smDiagnostics summary, #kshDiagnostics summary { cursor: pointer; color: #f2cb83; }
+#maiDiagnostics ul, #susDiagnostics ul, #smDiagnostics ul, #kshDiagnostics ul { max-height: 12em; overflow: auto; padding-left: 1.3em; overflow-wrap: anywhere; }
 
 #maiLegend p { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
 
@@ -1110,3 +1110,6 @@ input[type="range"]::-moz-range-thumb {
 .export-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
 #maiExportStatus { flex: 1; overflow-wrap: anywhere; min-width: 5em; }
 #maiExportSave { color: #79dafa; }
+
+.ksh-skin-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+#kshSkinStatus { color: var(--text-muted); overflow-wrap: anywhere; }

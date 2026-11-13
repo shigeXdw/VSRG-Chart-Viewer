@@ -163,6 +163,7 @@
     playing: false,
     starting: false,
     seeking: false,
+    seekPreview: null,
     playGeneration: 0,
     videoUrl: "",
     currentBga: "",
@@ -252,126 +253,6 @@
     });
   }
 
-  function parseChart(text, name) {
-    const lines = text.split(/\r?\n/);
-    const header = {};
-    const wav = new Map();
-    const bmp = new Map();
-    const bpmExt = new Map();
-    const raw = [];
-    let base = 36;
-
-    for (const source of lines) {
-      const line = source.trim();
-      if (!line || line.startsWith("*")) continue;
-      let match;
-      if ((match = line.match(/^#BASE\s+(\d+)/i))) {
-        base = Number(match[1]) === 62 ? 62 : 36;
-      } else if ((match = line.match(/^#WAV([0-9A-Za-z]{2})\s+(.+)$/i))) {
-        wav.set(match[1], match[2].trim());
-      } else if ((match = line.match(/^#BMP([0-9A-Za-z]{2})\s+(.+)$/i))) {
-        bmp.set(match[1], match[2].trim());
-      } else if ((match = line.match(/^#BPM([0-9A-Za-z]{2})\s+([\d.]+)/i))) {
-        bpmExt.set(match[1], Number(match[2]));
-      } else if ((match = line.match(/^#(\d{3})([0-9A-Za-z]{2}):(.+)$/))) {
-        raw.push({ measure: Number(match[1]), channel: match[2].toUpperCase(), data: match[3].trim() });
-      } else if ((match = line.match(/^#([A-Z][A-Z0-9]*)\s*(.*)$/i))) {
-        header[match[1].toUpperCase()] = match[2].trim();
-      }
-    }
-
-    const measureRatios = new Map();
-    for (const row of raw) if (row.channel === "02") measureRatios.set(row.measure, Number(row.data));
-    const maxMeasure = Math.max(0, ...raw.map((row) => row.measure));
-    const starts = [0];
-    for (let measure = 0; measure <= maxMeasure + 1; measure++) {
-      starts[measure + 1] = starts[measure] + 4 * (measureRatios.get(measure) || 1);
-    }
-
-    const events = [];
-    for (const row of raw) {
-      if (row.channel === "02") continue;
-      const count = Math.floor(row.data.length / 2);
-      for (let index = 0; index < count; index++) {
-        const object = row.data.slice(index * 2, index * 2 + 2);
-        if (object === "00") continue;
-        events.push({
-          beat: starts[row.measure] + 4 * (measureRatios.get(row.measure) || 1) * index / count,
-          measure: row.measure, channel: row.channel, object
-        });
-      }
-    }
-
-    const initialBpm = Number(header.BPM) || 120;
-    const bpmChanges = [{ beat: 0, bpm: initialBpm }];
-    for (const event of events) {
-      if (event.channel === "03") bpmChanges.push({ beat: event.beat, bpm: parseInt(event.object, 16) });
-      if (event.channel === "08") bpmChanges.push({ beat: event.beat, bpm: bpmExt.get(event.object) || initialBpm });
-    }
-    bpmChanges.sort((a, b) => a.beat - b.beat);
-
-    function beatToSeconds(beat) {
-      let seconds = 0, cursor = 0, bpm = initialBpm;
-      for (const change of bpmChanges) {
-        if (change.beat <= cursor) { bpm = change.bpm; continue; }
-        if (change.beat >= beat) break;
-        seconds += (change.beat - cursor) * 60 / bpm;
-        cursor = change.beat;
-        bpm = change.bpm;
-      }
-      return seconds + (beat - cursor) * 60 / bpm;
-    }
-
-    for (const change of bpmChanges) change.time = beatToSeconds(change.beat);
-    for (const event of events) event.time = beatToSeconds(event.beat);
-    function secondsToBeat(seconds) {
-      let elapsed = 0, beat = 0, bpm = initialBpm;
-      for (const change of bpmChanges) {
-        if (change.beat <= beat) { bpm = change.bpm; continue; }
-        const segment = (change.beat - beat) * 60 / bpm;
-        if (elapsed + segment >= seconds) return beat + (seconds - elapsed) * bpm / 60;
-        elapsed += segment;
-        beat = change.beat;
-        bpm = change.bpm;
-      }
-      return beat + (seconds - elapsed) * bpm / 60;
-    }
-    events.sort((a, b) => a.time - b.time);
-    const playable = events.filter((event) => /^[12][1-9]$/.test(event.channel));
-    const longNotes = events.filter((event) => /^[56][1-9]$/.test(event.channel));
-    const longNoteState = new Map();
-    for (const event of longNotes) {
-      const active = longNoteState.get(event.channel);
-      event.longStart = !active;
-      if (active) {
-        event.longPair = active;
-        active.longPair = event;
-        longNoteState.delete(event.channel);
-      } else {
-        longNoteState.set(event.channel, event);
-      }
-    }
-    const duration = Math.max(beatToSeconds(starts[maxMeasure + 1]), ...events.map((event) => event.time));
-    const lanes = events.some((event) => /^2[1-9]$/.test(event.channel) || /^6[1-9]$/.test(event.channel)) ? 16 : 8;
-    const hitNotes = [...playable, ...longNotes.filter((event) => event.longStart)].sort((a, b) => a.time - b.time);
-    const displayNotes = [...playable, ...longNotes].sort((a, b) => a.time - b.time);
-    const bgmEvents = events.filter((event) => event.channel === "01");
-    const keyEvents = events.filter((event) =>
-      /^[12][1-9]$/.test(event.channel) ||
-      (/^[56][1-9]$/.test(event.channel) && event.longStart)
-    );
-    const bgaEvents = events.filter((event) => event.channel === "04");
-
-    return {
-      name, header, base, wav, bmp, events, playable, longNotes, bpmChanges,
-      duration, lanes, beatToSeconds, secondsToBeat, measureStarts: starts,
-      hitNotes, displayNotes, bgmEvents, keyEvents, bgaEvents,
-      layerEvents: events.filter((event) => event.channel === "07"),
-      poorEvents: events.filter((event) => event.channel === "06"),
-      noteCount: Number(header.TOTALNOTES) || playable.length
-    };
-  }
-
   function parseBmson(text, name) {
     const data = JSON.parse(text.replace(/^\uFEFF/, ""));
     const info = data.info || {};
@@ -395,31 +276,9 @@
       .map((event) => ({ y: Number(event.y) || 0, duration: Number(event.duration) || 0 }))
       .sort((a, b) => a.y - b.y);
 
-    function pulseToSeconds(pulse) {
-      let seconds = 0;
-      let cursor = 0;
-      let bpm = initialBpm;
-      let bpmIndex = 0;
-      let stopIndex = 0;
-      while (cursor < pulse) {
-        const nextBpm = bpmRaw[bpmIndex + 1]?.y ?? Infinity;
-        const nextStop = stops[stopIndex]?.y ?? Infinity;
-        const next = Math.min(pulse, nextBpm, nextStop);
-        seconds += (next - cursor) / resolution * 60 / bpm;
-        cursor = next;
-        if (cursor === nextBpm) {
-          bpmIndex++;
-          bpm = bpmRaw[bpmIndex].bpm;
-        }
-        if (cursor === nextStop && cursor < pulse) {
-          seconds += stops[stopIndex].duration / resolution * 60 / bpm;
-          stopIndex++;
-        } else if (cursor === nextStop) {
-          break;
-        }
-      }
-      return seconds;
-    }
+    const timing=BmsChart.clock(initialBpm,bpmRaw.map(e=>({beat:e.y/resolution,bpm:e.bpm})),
+      stops.map(e=>({beat:e.y/resolution,length:e.duration/resolution})));
+    const pulseToSeconds=pulse=>timing.beatToSeconds(pulse/resolution);
 
     function laneChannel(x, long = false) {
       const value = Number(x);
@@ -506,11 +365,9 @@
       events.push({ beat: Number(event.y) / resolution, pulse: Number(event.y), measure: 0, channel: "06", object: String(event.id), time: pulseToSeconds(Number(event.y)) });
     }
 
-    const maxPulse = Math.max(
-      resolution * 4,
-      ...events.map((event) => event.pulse || Math.round(event.beat * resolution)),
-      ...(data.lines || []).map((line) => Number(line.y) || 0)
-    );
+    let maxPulse=resolution*4;
+    for(const e of events)maxPulse=Math.max(maxPulse,e.pulse??Math.round(e.beat*resolution));
+    for(const line of data.lines||[])maxPulse=Math.max(maxPulse,Number(line.y)||0);
     let linePulses = (data.lines || []).map((line) => Number(line.y) || 0).sort((a, b) => a - b);
     if (!linePulses.length) {
       linePulses = [];
@@ -522,7 +379,7 @@
       event.measure = Math.max(0, upperBoundValue(measureStarts, event.beat) - 1);
     }
     events.sort((a, b) => a.time - b.time);
-    const bpmChanges = bpmRaw.map((event) => ({ beat: event.y / resolution, bpm: event.bpm, time: pulseToSeconds(event.y) }));
+    const {bpmChanges,beatToSeconds,secondsToBeat}=timing;
     const playable = [...visualByPosition.values()].filter((event) => !event.longStart);
     const longNotes = events.filter((event) => /^[56]/.test(event.channel));
     const hitNotes = [...visualByPosition.values()].sort((a, b) => a.time - b.time);
@@ -530,17 +387,6 @@
     const bgmEvents = events.filter((event) => event.channel === "01");
     const keyEvents = events.filter((event) => /^[12]/.test(event.channel) || (/^[56]/.test(event.channel) && event.longStart));
     const duration = pulseToSeconds(maxPulse + resolution * 4);
-
-    function beatToSeconds(beat) { return pulseToSeconds(beat * resolution); }
-    function secondsToBeat(seconds) {
-      let low = 0, high = maxPulse + resolution * 8;
-      for (let count = 0; count < 32; count++) {
-        const middle = (low + high) / 2;
-        if (pulseToSeconds(middle) < seconds) low = middle;
-        else high = middle;
-      }
-      return (low + high) / 2 / resolution;
-    }
 
     return {
       name, header, base: "BMSON", wav, bmp, events, playable, longNotes, bpmChanges,
@@ -839,7 +685,7 @@
       return;
     }
 
-    if (state.chart.modeId === "maimai" || state.chart.modeId === "stepmania") {
+    if (["maimai", "stepmania", "sdvx"].includes(state.chart.modeId)) {
       // Native lanes come directly from the chart and ignore BMS lane mods.
       updateLaneArrangement();
       return;
@@ -980,6 +826,7 @@
   }
 
   function resetLoadedContent() {
+    MaiMachine.change(null, []);
     state.chart = null;
     clearMeasureGrid();
     syncViewVisibility();
@@ -1010,7 +857,7 @@
         const parsed = await PlayerModes.parse(file, {
           chartPath, files,
           decodeText,
-          parseBms: parseChart,
+          parseBms: BmsChart.parse,
           parseBmson,
           parseOsu
         });
@@ -1050,7 +897,7 @@
 
   function chartSelectLabel(chart) {
     if (chart.mode?.selectLabel) return chart.mode.selectLabel(chart);
-    const title = chart.header.TITLE || chart.name.replace(/\.(bms|bme|bmson|osu|ugc|sm|ssc)$/i, "");
+    const title = chart.header.TITLE || chart.name.replace(/\.(bms|bme|bml|bmson|osu|ugc|sm|ssc)$/i, "");
     if (chart.format === "osu") {
       const rating = Number.isFinite(chart.stars) ? chart.stars.toFixed(2) : "--";
       const version = chart.header.OSU_VERSION || chart.name;
@@ -1113,6 +960,7 @@
     const previousSong = state.chart?.songMedia;
     stop();
     state.chart = state.charts[index];
+    MaiMachine.change(state.chart, state.charts);
     state.pausedAt = -(state.chart.mode?.introDuration || 0);
     syncViewVisibility();
     if (state.view === "player") syncCanvasSize();
@@ -1163,6 +1011,8 @@
     const customField = Boolean(c.mode?.drawPlayfield);
     const ugc = c.modeId === "ugc";
     const mai = c.modeId === "maimai";
+    const ksh = c.modeId === "sdvx";
+    $("kshSettings").hidden = !ksh;
     ui.playerView.classList.toggle("mai-mode", mai);
     $("maiSettings").hidden = !mai;
     $("maiPlayfield").hidden = !mai;
@@ -1170,7 +1020,7 @@
     ui.maiBlur.disabled = mai && !chartHasBga(c);
     ui.keysounds.closest("label").querySelector("span").textContent = mai ? "Hitsounds" : "Keysounds";
     const issues = c.diagnostics || [];
-    const diagnostics = $(ugc ? "susDiagnostics" : c.modeId === "stepmania" ? "smDiagnostics" : "maiDiagnostics");
+    const diagnostics = $(ugc ? "susDiagnostics" : ksh ? "kshDiagnostics" : c.modeId === "stepmania" ? "smDiagnostics" : "maiDiagnostics");
     $("smDiagnostics").hidden = true;
     if (ugc) $("ugcSettingsTitle").textContent = c.format.toUpperCase();
     diagnostics.hidden = !issues.length;
@@ -1180,12 +1030,12 @@
     }));
     ui.playerView.classList.toggle("ugc-mode", ugc);
     ui.ugcSettings.hidden = !ugc;
-    ui.scrollMode.closest(".setting-group").hidden = ugc || mai;
+    ui.scrollMode.closest(".setting-group").hidden = ugc || mai || ksh;
     for (const control of [ui.columnWidth, ui.scratchWidth, ui.sudden, ui.laneArrangement1, ui.noteThickness]) {
       const row = control.closest("label, .sudden-control, .lane-arrangement");
-      if (row) row.hidden = ugc || mai;
+      if (row) row.hidden = ugc || mai || ksh;
     }
-    document.querySelectorAll(".mod-control, .inspector-mod-control").forEach((row) => { row.hidden = ugc || mai; });
+    document.querySelectorAll(".mod-control, .inspector-mod-control").forEach((row) => { row.hidden = ugc || mai || ksh; });
     modButtons.forEach((button) => {
       button.disabled = customField;
     });
@@ -1212,7 +1062,7 @@
     renderPlayerRadar();
     if (state.view === "inspector") renderInspector();
     state.playbackJacket = null;
-    const jacketPath = c.modeId === "maimai" ? c.songMedia.cover : c.modeId === "ugc" ? c.jacket : "";
+    const jacketPath = c.modeId === "maimai" ? c.songMedia.cover : c.modeId === "ugc" ? c.jacket : c.modeId === "sdvx" ? c.bmp.get("jacket") : "";
     if (jacketPath) {
       loadBgaAsset(jacketPath, false, true).then(asset => {
         if (state.chart !== c || asset?.kind !== "image") return;
@@ -1227,15 +1077,9 @@
   }
 
   function bpmAt(time) {
-    let bpm = Number(state.chart?.header.BPM) || 120;
-    for (const change of state.chart?.bpmChanges || []) {
-      if (change.time <= time) {
-        bpm = change.bpm;
-      } else {
-        break;
-      }
-    }
-    return bpm;
+    const changes=state.chart?.bpmChanges||[];
+    const i=upperBoundTime(changes,time)-1;
+    return i>=0?changes[i].bpm:Number(state.chart?.header.BPM)||120;
   }
 
   function difficultyFromName(name) {
@@ -1410,11 +1254,15 @@
     const chart = state.chart;
     const speed = playbackSpeed();
     const changesPitch = ui.pitchWithSpeed.checked;
-    const buffer = await getAudioBuffer(object);
+    const useEffects = Boolean(chart.mode?.playbackBuffer && $("kshFx").checked);
+    let buffer = await getAudioBuffer(object);
+    if (state.chart === chart && useEffects) {
+      buffer = await chart.mode.playbackBuffer(chart, object, buffer, state.audio, getAudioBuffer);
+    }
     if (state.chart !== chart || speed !== playbackSpeed() || changesPitch !== ui.pitchWithSpeed.checked) return null;
     if (!buffer || fixedPitch || changesPitch || Math.abs(speed - 1) < 0.001) return buffer;
 
-    const key = `${object}:${speed.toFixed(3)}`;
+    const key = `${object}:${speed.toFixed(3)}:${useEffects}`;
     if (state.stretchedBuffers.has(key)) return state.stretchedBuffers.get(key);
     const promise = Promise.resolve().then(() => stretchAudioBuffer(buffer, speed));
     state.stretchedBuffers.set(key, promise);
@@ -1526,9 +1374,13 @@
       state.maiFxGain.gain.value = 0.75;
       state.maiFxGain.connect(state.gain);
     }
-    source.connect(event.maiSound ? state.maiFxGain : state.gain);
+    const destination = event.maiSound ? state.maiFxGain : state.gain;
+    const gain = Number.isFinite(event.gain) && event.gain !== 1 ? state.audio.createGain() : null;
+    if (gain) { gain.gain.value = event.gain; gain.connect(destination); }
+    source.connect(gain || destination);
     source.onended = () => {
       source.disconnect();
+      gain?.disconnect();
       const index = state.sources.indexOf(source);
       if (index >= 0) state.sources.splice(index, 1);
     };
@@ -1699,11 +1551,13 @@
     const time = chartTimeNow();
     const endTime = playbackEndTime();
     if (time >= endTime) {
-      if (state.chart.mode?.resultEnd?.(state.chart)) {
+      if (state.chart.mode?.resultEnd?.(state.chart) || (state.chart.modeId === "maimai" && globalThis.MaiMachine?.active())) {
         pause(endTime);
         ui.play.title = "Replay";
-        ui.seek.value = "1000";
-        ui.time.textContent = formatTime(endTime) + " / " + formatTime(endTime);
+        if (!state.seeking) {
+          ui.seek.value = "1000";
+          ui.time.textContent = formatTime(endTime) + " / " + formatTime(endTime);
+        }
         ui.status.textContent = "Autoplay complete.";
         updateNoteCounter(endTime);
         updateLiveStats(endTime);
@@ -1726,8 +1580,10 @@
       updateLaneArrangement(time);
       updateTempoDisplay(time);
       updateInspectorCurrent();
-      ui.time.textContent = `${formatTime(time)} / ${formatTime(endTime)}`;
-      if (!state.seeking) ui.seek.value = String(Math.round(time / endTime * 1000));
+      if (!state.seeking) {
+        ui.time.textContent = `${formatTime(time)} / ${formatTime(endTime)}`;
+        ui.seek.value = String(Math.round(time / endTime * 1000));
+      }
       state.lastUiUpdate = frameTime;
     }
     state.frame = requestAnimationFrame(tick);
@@ -1982,8 +1838,10 @@
       ui.play.textContent = "▶";
       ui.play.disabled = false;
     }
+    // Rebuild the visible state before asynchronous audio preparation.
+    // A slow or failed resume must not leave the previous shutter on screen.
+    draw(target);
     if (resume && target < endTime) await play();
-    else draw(target);
   }
 
   function laneFor(note, lanes) {
@@ -2189,8 +2047,8 @@
   }
 
   function registerHits(previous, time) {
-    // The circular renderer reconstructs hit effects directly from chart time.
-    if (!state.chart || state.chart.modeId === "maimai") return;
+    // These renderers reconstruct hit effects directly from chart time.
+    if (!state.chart || ["maimai", "sdvx"].includes(state.chart.modeId)) return;
     const notes = state.chart.hitNotes;
     const start = upperBoundTime(notes, previous);
     const end = upperBoundTime(notes, time);
@@ -2320,6 +2178,7 @@
   function isAirOrScratch(chart, note) {
     if (chart.ugc) return ["a", "H", "S", "C"].includes(note.parentType || note.type);
     if (chart.modeId === "maimai") return Boolean(note.area);
+    if (chart.modeId === "sdvx") return note.kind === "laser";
     const lane = laneFor(note, chart.lanes);
     return chart.hasScratch !== false && (lane === 0 || (chart.lanes === 16 && lane === 15));
   }
@@ -2345,7 +2204,11 @@
       else laneCounts[laneFor(note, chart.lanes)]++;
       if (isAirOrScratch(chart, note)) special++;
     }
-    const bpms = chart.bpmChanges.map((change) => change.bpm).filter(Number.isFinite);
+    let minBpm = Infinity, maxBpm = -Infinity;
+    for (const {bpm} of chart.bpmChanges) {
+      if (Number.isFinite(bpm)) { minBpm = Math.min(minBpm, bpm); maxBpm = Math.max(maxBpm, bpm); }
+    }
+    if (!Number.isFinite(minBpm)) minBpm = maxBpm = Number(chart.header.BPM) || 120;
     const chordSizes = [...chords.values()].filter((count) => count >= 2);
     const chordNotes = chordSizes.reduce((sum, count) => sum + count, 0);
     const chordExcess = chordSizes.reduce((sum, count) => sum + count - 1, 0);
@@ -2353,7 +2216,7 @@
     const averageChordSize = chordSizes.length ? chordNotes / chordSizes.length : 0;
     const longCount = chart.longNotes.filter((note) => note.longStart).length;
     const averageNps = notes.length / Math.max(1, chart.duration);
-    const bpmRatio = Math.max(...bpms) / Math.max(1, Math.min(...bpms));
+    const bpmRatio = maxBpm / Math.max(1, minBpm);
     const soflanChanges = Math.max(0, chart.bpmChanges.length - 1);
     const chordRatio = chordExcess / Math.max(1, notes.length);
     const chordScore = 100 * (
@@ -2367,8 +2230,7 @@
       laneCounts,
       special,
       longNotes: longCount,
-      minBpm: Math.min(...bpms),
-      maxBpm: Math.max(...bpms),
+      minBpm, maxBpm,
       radar: [
         Math.min(200, averageNps / 8 * 100),
         Math.min(200, peak / 18 * 100),
@@ -2396,10 +2258,11 @@
     ui.analysisNotes.textContent = String(chart.noteCount);
     ui.analysisPeak.textContent = analysis.peak.toFixed(1);
     ui.analysisChord.textContent = String(analysis.maxChord);
-    $("analysisSpecialLabel").textContent = chart.ugc ? "AIR hits" : chart.modeId === "maimai" ? "Touch" : "Scratch";
+    $("analysisSpecialLabel").textContent = chart.ugc ? "AIR hits" : chart.modeId === "maimai" ? "Touch" : chart.modeId === "sdvx" ? "Laser segments" : "Scratch";
     $("laneDistributionTitle").textContent = chart.ugc ? "Hits covering each lane" : "Lane distribution";
     $("maiLegend").hidden = chart.modeId !== "maimai";
-    $("keyLegend").hidden = !!chart.ugc || chart.modeId === "maimai";
+    $("kshLegend").hidden = chart.modeId !== "sdvx";
+    $("keyLegend").hidden = !!chart.ugc || ["maimai", "sdvx"].includes(chart.modeId);
     $("ugcLegend").hidden = !chart.ugc;
     if (chart.ugc) {
       chart.mode.inspectorLegend($("ugcNoteSymbols"));
@@ -2422,7 +2285,7 @@
       const row = document.createElement("div");
       row.className = "lane-stat";
       const label = document.createElement("span");
-      label.textContent = state.chart?.modeId === "maimai" && lane === 8 ? "C" : state.chart?.hasScratch !== false && (lane === 0 || (counts.length === 16 && lane === 15))
+      label.textContent = state.chart?.modeId === "sdvx" ? ["BT-A","BT-B","BT-C","BT-D","FX-L","FX-R","VOL-L","VOL-R"][lane] : state.chart?.modeId === "maimai" && lane === 8 ? "C" : state.chart?.hasScratch !== false && (lane === 0 || (counts.length === 16 && lane === 15))
         ? "SC"
         : String(state.chart?.hasScratch === false ? lane + 1 : counts.length === 16 && lane >= 8 ? lane - 7 : lane);
       const meter = document.createElement("span");
@@ -2640,7 +2503,7 @@
     const compact = Boolean(options.compact);
     const maximumRadius = Math.min(width * (compact ? 0.31 : 0.4), height * (compact ? 0.33 : 0.4));
     const radius100 = maximumRadius * 0.68;
-    const labels = ["NOTES", "PEAK", state.chart?.ugc ? "AIR" : "SCRATCH", "SOF-LAN", "CHARGE", "CHORD"];
+    const labels = ["NOTES", "PEAK", state.chart?.ugc ? "AIR" : state.chart?.modeId === "sdvx" ? "LASER" : "SCRATCH", "SOF-LAN", "CHARGE", "CHORD"];
     const colors = ["#f064cf", "#f6d64a", "#ff7c58", "#6d7cff", "#49d8df", "#b7e65c"];
     const levelColor = currentDifficultyStyle()[1];
     const point = (axis, value = 100) => {
@@ -2992,8 +2855,10 @@
     ctx.font = "800 20px ui-monospace, SFMono-Regular, Consolas, monospace";
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
-    for (const change of chart.bpmChanges) {
-      if (change.beat <= currentBeat + 0.001 || change.beat > lastBeat) continue;
+    for(let i=lowerBoundBeat(chart.bpmChanges,currentBeat+.001);i<chart.bpmChanges.length;i++){
+      const change=chart.bpmChanges[i];
+      if(change.beat>lastBeat)break;
+      if(change.beat<=currentBeat+.001)continue;
       const distance = noteDistance(change);
       if (distance < 0 || distance > height) continue;
       const y = hitY - distance;
@@ -3012,9 +2877,12 @@
   }
 
   function draw(time, frameTime = performance.now()) {
+    // Playback and media callbacks must not overwrite an active scrub preview.
+    if (state.seeking && state.seekPreview !== null) time = state.seekPreview;
     const width = state.canvasWidth, height = state.canvasHeight;
     if (state.view === "inspector" || !(width > 0 && height > 0)) return;
     const chart = state.chart;
+    if (chart?.modeId === "maimai" && MaiMachine.frame(chart, time)) return;
     const ownStage = chart?.modeId === "ugc" || chart?.modeId === "maimai";
     // The UGC stage is opaque and covers the canvas itself.
     if (!ownStage || state.bgaBackdrop) ctx.clearRect(0, 0, width, height);
@@ -3037,6 +2905,8 @@
         effects: state.effects,
         hitEffectsEnabled: ui.hitEffects.checked,
         ...(chart.modeId === "maimai" ? maiFieldSettings() : {}),
+        ...(chart.modeId === "maimai" && MaiMachine.active() ? {cabinetGlass:true, bottomInset:0, maiExtraInfo:false} : {}),
+        ...(chart.modeId === "sdvx" ? {kshSpeed:Number($("kshSpeed").value), kshCamera:$("kshCamera").checked} : {}),
         hitEffectDuration: HIT_EFFECT_DURATION,
         frameTime,
         settings: ugcSettings(),
@@ -3049,6 +2919,7 @@
           ? Math.max(0.25, hiSpeed())
           : Math.max(0.25, Number(ui.speed.value) / 400)
       });
+      if (chart.modeId === "maimai" && MaiMachine.active()) MaiMachine.afterDraw();
       return;
     }
     const lanes = chart?.lanes || 8;
@@ -3319,12 +3190,37 @@
   }
 
   function bindControls() {
+    MaiMachine.bind({
+      chart: () => state.chart, library: () => state.charts, file: path => findFile(path,"image"),
+      select: index => { ui.select.value=String(index); selectChart(index); },
+      stop, play, running: () => state.playing || state.starting,
+      resize: () => { if(state.view==="player"){syncCanvasSize();draw(state.pausedAt);} }
+    });
+    KshSkins.bind(() => { if (state.chart?.modeId === "sdvx") draw(chartTimeNow()); });
+    const kshSpeed = $("kshSpeed");
+    kshSpeed.value = localStorage.getItem("vsrg-ksh-speed") ?? kshSpeed.defaultValue;
+    $("kshSpeedValue").value = kshSpeed.value;
+    bindRange(kshSpeed, $("kshSpeedValue"), "", () => {
+      localStorage.setItem("vsrg-ksh-speed", kshSpeed.value); draw(chartTimeNow());
+    });
+    for (const id of ["kshCamera", "kshFx"]) {
+      const input = $(id);
+      input.checked = localStorage.getItem("vsrg-" + id) !== "off";
+      input.addEventListener("change", () => {
+        localStorage.setItem("vsrg-" + id, input.checked ? "on" : "off");
+        if (id === "kshFx") {
+          state.stretchedBuffers.clear();
+          restartPlaybackForAudioChange();
+        }
+        draw(chartTimeNow());
+      });
+    }
     MaiExportUI.bind(() => {
       const chart = state.chart;
       if (chart?.modeId !== "maimai") throw new Error("Open a maimai chart first.");
       const media = chart.songMedia;
       return {
-        chart, field: maiFieldSettings(), speed: playbackSpeed(), pitch: ui.pitchWithSpeed.checked,
+        chart, machine: MaiMachine.active(), field: maiFieldSettings(), speed: playbackSpeed(), pitch: ui.pitchWithSpeed.checked,
         hitsounds: ui.keysounds.checked, volume: Number(ui.volume.value), stretch: stretchAudioBuffer,
         cover: media.cover && findFile(media.cover, "image"),
         video: media.video && findFile(media.video, "video"),
@@ -3412,7 +3308,7 @@
     }
     ui.select.addEventListener("change", () => selectChart(Number(ui.select.value)));
     ui.play.addEventListener("click", () => state.playing || state.starting ? pause() : play());
-    ui.stop.addEventListener("click", stop);
+    ui.stop.addEventListener("click", () => MaiMachine.active() ? MaiMachine.returnToSelect() : stop());
     ui.bgaBackdropToggle.addEventListener("click", () => setBgaBackdrop(!state.bgaBackdrop));
     viewButtons.forEach((button) => {
       button.addEventListener("click", () => switchView(button.dataset.view));
@@ -3520,16 +3416,28 @@
 
     ui.seek.addEventListener("pointerdown", () => {
       state.seeking = true;
+      state.seekPreview = null;
+    });
+    ui.seek.addEventListener("pointerup", () => {
+      if (state.seekPreview === null) state.seeking = false;
+    });
+    ui.seek.addEventListener("pointercancel", () => {
+      state.seeking = false;
+      state.seekPreview = null;
+      draw(chartTimeNow());
     });
     ui.seek.addEventListener("input", () => {
       if (!state.chart) return;
       const endTime = playbackEndTime();
       const target = Number(ui.seek.value) / 1000 * endTime;
+      state.seeking = true;
+      state.seekPreview = target;
       ui.time.textContent = `${formatTime(target)} / ${formatTime(endTime)}`;
       draw(target);
     });
     ui.seek.addEventListener("change", async () => {
       state.seeking = false;
+      state.seekPreview = null;
       await seekTo(Number(ui.seek.value) / 1000 * playbackEndTime());
     });
     ui.back.addEventListener("click", () => seekTo(state.pausedAt - 10));
@@ -3558,7 +3466,7 @@
       }
       if (event.code === "KeyR") {
         event.preventDefault();
-        stop();
+        if (MaiMachine.active()) MaiMachine.returnToSelect(); else stop();
       }
     });
     for (const media of [ui.video, ui.layerVideo]) {
