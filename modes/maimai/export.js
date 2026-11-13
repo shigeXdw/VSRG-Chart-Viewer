@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  const width = 1920, height = 1080, fps = 60, sampleRate = 48000;
+  const fps = 60, sampleRate = 48000;
   let libraryPromise;
 
   function loadLibrary() {
@@ -135,7 +135,7 @@
     };
   }
 
-  async function selectVideoEncoder(lib, signal) {
+  async function selectVideoEncoder(lib, signal, width, height) {
     const bitrate = 32_000_000;
     for (const hardwareAcceleration of ["prefer-hardware", "no-preference"]) {
       for (const codec of ["avc", "vp9", "av1"]) {
@@ -150,12 +150,15 @@
   }
 
   async function render(job, signal, progress) {
+    const preset = job.machineCamera ? MaiCabinet.presets[job.machineCamera] : null;
+    if (job.machineCamera && !preset) throw new Error("Unknown machine camera preset.");
+    const width = preset?.width || 1920, height = preset?.height || 1080;
     progress(0, "Checking encoders");
     const lib = await loadLibrary();
-    const videoConfig = await selectVideoEncoder(lib, signal);
+    const videoConfig = await selectVideoEncoder(lib, signal, width, height);
     const codecName = {avc:"H.264", vp9:"VP9", av1:"AV1"}[videoConfig.codec];
     const preference = videoConfig.hardwareAcceleration === "prefer-hardware" ? "GPU preferred" : "browser default";
-    const rendering = `Rendering · ${codecName} · ${videoConfig.bitrate / 1_000_000} Mbps target (${preference})`;
+    const rendering = `Rendering ${width}×${height} · ${codecName} · ${videoConfig.bitrate / 1_000_000} Mbps target (${preference})`;
     let audioCodec;
     for (const codec of ["aac", "opus", "pcm-s16"]) {
       if (await lib.canEncodeAudio(codec, {numberOfChannels:2, sampleRate, bitrate:192000})) { audioCodec = codec; break; }
@@ -175,7 +178,10 @@
     const video = new lib.CanvasSource(canvas, {...videoConfig, keyFrameInterval:2});
     const sound = new lib.AudioBufferSource({codec:audioCodec, bitrate:192000});
     const movieEvent = chart.bgaEvents.find(event => event.object === "video");
-    let jacket, movie;
+    const field = preset ? document.createElement("canvas") : canvas;
+    if (preset) field.width = field.height = 1080;
+    const fieldContext = preset ? field.getContext("2d", {alpha:false}) : context;
+    let jacket, movie, machine;
     try {
       output.addVideoTrack(video, {frameRate:fps});
       output.addAudioTrack(sound);
@@ -184,6 +190,10 @@
         if (!job.video) throw new Error("The chart's background video is missing.");
         progress(0, "Preparing video");
         movie = await openMovie(lib, job.video, movieEvent.mediaOffset || 0, signal);
+      }
+      if (preset) {
+        progress(0, "Preparing cabinet and camera");
+        machine = await MaiMachineExport.create(job, chart, field, jacket, signal);
       }
       await output.start();
       const chunkFrames = Math.min(frames, fps);
@@ -199,8 +209,18 @@
           background = sample?.image;
           videoTime = sample?.time;
         }
-        MaiRenderer.draw({...job.field, chart, context, width, height, time, jacket,
+        MaiRenderer.draw({...job.field, chart, context:fieldContext, width:field.width, height:field.height, time, jacket,
+          ...(preset ? {cabinetGlass:true, maiExtraInfo:false} : {}),
           maiBackground:background, videoFrameTime:videoTime, outerColor:"#000000", bottomInset:0, infoScale:1.6});
+        if (machine) {
+          context.drawImage(machine.draw(time, frame / fps), 0, 0);
+          // Attribution belongs to exported renders as well as the live view.
+          context.save(); context.font = "11px system-ui"; context.textBaseline = "bottom";
+          context.fillStyle = "rgba(220,226,234,0.48)";
+          context.shadowColor = "rgba(0,0,0,0.55)"; context.shadowBlur = 2;
+          context.fillText("Cabinet adapted by viewer · Model: 藍玉CiAN · CC BY-NC-SA 4.0 · makerworld.com/en/models/1126413-maimaidx-style-model", 16, height-10);
+          context.restore();
+        }
         await video.add(frame / fps, 1 / fps);
         if ((frame + 1) % fps === 0 || frame === frames - 1) {
           const offset = Math.floor(frame / fps) * sampleRate;
@@ -223,7 +243,7 @@
       return new Blob(parts, {type:"video/mp4"});
     } finally {
       try { if (output.state === "started") await output.cancel(); }
-      finally { jacket?.close(); await movie?.close(); }
+      finally { machine?.close(); jacket?.close(); await movie?.close(); }
     }
   }
 

@@ -4,7 +4,7 @@
   PlayerModes.register({
     id: "bms",
     name: "BMS / BME / BMSON",
-    detect: (file) => /\.(bms|bme|bmson)$/i.test(file.name),
+    detect: (file) => /\.(bms|bme|bml|bmson)$/i.test(file.name),
     async parse(file, context) {
       const bmson = /\.bmson$/i.test(file.name);
       const text = bmson ? await file.text() : await context.decodeText(file);

@@ -1,0 +1,127 @@
+/* Screen artwork is pre-rendered PNG. machine.css supplies layout and motion;
+   chart metadata, live values and accessible controls remain DOM elements. */
+.machine-menu,
+.machine-monitor {
+  background: #82dce0 url("../../assets/maimai-ui/landscape.png") center / cover;
+}
+.machine-monitor { background-position: center 20%; background-size: 100% auto; }
+.machine-menu::before {
+  background: url("../../assets/maimai-ui/menu-band.png") center / 100% 100%;
+  border-radius: 0;
+}
+.machine-menu::after {
+  left: 0; width: 100%; mask: none;
+  background: var(--ui-arc) center / 100% 100%;
+}
+:is(#machineHeading, [data-source-id="machineHeading"])::before {
+  height: 21cqw; aspect-ratio: auto; mask: none; clip-path: none;
+  background: var(--ui-header) top center / 100% 100%;
+}
+.machine-instruction { background: url("../../assets/maimai-ui/instruction.png") center / 100% 100%; box-shadow: none; }
+.machine-instruction::after { content: ""; position: absolute; left: 0; top: 100%; width: 100%; height: 1.5cqw; background: var(--ui-strip) center / 100% 100%; }
+.machine-card {
+  height: auto; aspect-ratio: 320 / 560; padding: 0; border: 0; border-radius: 0;
+  background: var(--ui-card) center / 100% 100%; box-shadow: none;
+}
+.machine-card-tab { display: none; }
+.machine-card .machine-cover {
+  position: absolute; left: 7.8125%; top: 13.0357%; width: 84.375%;
+  margin: 0; border: 0; border-radius: 0; box-shadow: none;
+}
+.machine-cover { background: url("../../assets/maimai-ui/cover-fallback.png") center / cover; }
+.machine-cover::before { display: none; }
+.machine-card-difficulty { position: absolute; top: 62.14%; left: 0; width: 100%; height: 8.75%; box-sizing: border-box; background: none; }
+.machine-card-title { position: absolute; top: 70.89%; left: 2%; width: 96%; height: 6.07%; box-sizing: border-box; background: none; padding: 0 .6cqw; font-size: 1.55cqw; line-height: 2.3cqw; }
+.machine-card-artist { position: absolute; top: 76.96%; left: 2%; width: 96%; height: 5.36%; box-sizing: border-box; background: none; padding: 0 .6cqw; line-height: 2cqw; }
+.machine-card-footer { bottom: 1.5%; height: 9%; background: none; border-radius: 0; padding: 0 1cqw .4cqw; }
+.machine-card-footer small { background: none; }
+.machine-option-card { height: 31%; aspect-ratio: auto; border-radius: 0; background-image: var(--ui-option); }
+.machine-option-card h3 { position: absolute; left: 4%; right: 4%; top: 3%; height: 12%; padding: 0; display: grid; place-items: center; background: none; }
+.machine-option-icon { position: absolute; left: 35%; top: 19%; width: 30%; height: 30%; font-size: 0; background: url("../../assets/maimai-ui/icon-options.png") center / contain no-repeat; }
+.machine-option-card[data-option="sound"] .machine-option-icon { background-image: url("../../assets/maimai-ui/icon-sound.png"); }
+.machine-option-card p { position: absolute; top: 50%; left: 5%; margin: 0; }
+.machine-option-card strong { position: absolute; top: 68.4%; left: 5%; width: 90%; height: 14.5%; display: grid; place-items: center; margin: 0; padding: 0; background: none; }
+
+/* Concentric edges, not a rectangular face rotated against the circular rim.
+   The image includes its outlines, bevel, lettering and alpha silhouette. */
+.machine-actions span {
+  left: 32.9323%; top: 91.2048%; width: 23.6%; height: 12.4%; padding: 0;
+  background: url("../../assets/maimai-ui/button-back.png") center / 100% 100% no-repeat;
+  filter: none; text-shadow: none; border: 0; border-radius: 0; box-shadow: none;
+}
+.machine-actions span:last-child { left: 67.0677%; }
+.machine-actions span::before, .machine-actions span::after { display: none; }
+.machine-actions small, .machine-actions strong { visibility: hidden; }
+.machine-actions [data-label="Next"] { background-image: url("../../assets/maimai-ui/button-next.png"); }
+.machine-actions [data-label="Start track"] { background-image: url("../../assets/maimai-ui/button-start.png"); }
+.machine-actions [data-label="Options"] { background-image: url("../../assets/maimai-ui/button-options.png"); }
+.machine-actions [data-label="Done"] { background-image: url("../../assets/maimai-ui/button-done.png"); }
+.machine-actions [data-label="Select difficulty"] { background-image: url("../../assets/maimai-ui/button-select.png"); }
+.machine-nav { border: 0; box-shadow: none; border-radius: 0; font-size: 0; background: url("../../assets/maimai-ui/arrow-left.png") center / contain no-repeat; }
+.machine-right { background-image: url("../../assets/maimai-ui/arrow-right.png"); }
+.machine-setting-ring-actions span { border: 0; box-shadow: none; background: url("../../assets/maimai-ui/value-key.png") center / 100% 100% no-repeat; }
+.machine-setting-ring-actions span:nth-child(n+3) { font-size: 0; background: url("../../assets/maimai-ui/category-left.png") center / contain no-repeat; }
+.machine-setting-ring-actions span:nth-child(4) { background-image: url("../../assets/maimai-ui/category-right.png"); }
+.machine-setting-tabs span, .machine-setting-tabs .selected { border: 0; border-radius: 0; box-shadow: none; background: var(--ui-tab) center / 100% 100%; }
+.machine-setting-tabs span:not(.selected) { opacity: .8; }
+.machine-setting-card { padding: 0; border: 0; border-radius: 0; box-shadow: none; background: url("../../assets/maimai-ui/setting.png") center / 100% 100%; }
+.machine-setting-card h3 { position: absolute; left: 3%; right: 3%; top: 4%; margin: 0; }
+.machine-setting-preview { position: absolute; left: 3.6%; top: 14.4%; width: 92.8%; height: 34.9%; border-radius: 0; background: url("../../assets/maimai-ui/blank-preview.png") center / 100% 100%; }
+.machine-setting-preview::before { display: none; }
+.machine-setting-explanation { box-sizing: border-box; padding: 1.6cqw .8cqw; display: flex; flex-direction: column; justify-content: center; gap: .8cqw; color: #effaff; }
+.machine-setting-explanation small { font: 700 1.2cqw/1.2 system-ui; letter-spacing: .08em; color: #a3c9dc; }
+.machine-setting-explanation strong { font: 800 3cqw/1.15 system-ui; font-variant-numeric: tabular-nums; }
+.machine-setting-explanation span { font: 500 1.45cqw/1.35 system-ui; color: #c8e1eb; }
+.machine-setting-card p { position: absolute; left: 4%; top: 50%; width: 92%; height: 11%; margin: 0; display: grid; place-items: center; }
+.machine-setting-card output { position: absolute; left: 3.6%; top: 63.7%; width: 92.8%; height: 15.3%; display: grid; place-items: center; padding: 0; border-radius: 0; background: none; }
+.machine-setting-adjust { position: absolute; left: 5%; top: 82%; width: 90%; margin: 0; }
+.machine-setting-adjust span { height: 3.8cqw; padding: 0; font-size: 0; border: 0; box-shadow: none; background: url("../../assets/maimai-ui/adjust-minus.png") center / 100% 100%; }
+.machine-setting-adjust span:last-child { background-image: url("../../assets/maimai-ui/adjust-plus.png"); }
+.machine-setting-help { border-radius: 0; background: url("../../assets/maimai-ui/help.png") center / 100% 100%; }
+.machine-setting-preview[data-setting="maiBlur"], .machine-setting-preview[data-setting="maiDarkness"] { background-image: url("../../assets/maimai-ui/landscape.png"); }
+.machine-setting-preview[data-setting="maiDarkness"]::after { background: url("../../assets/maimai-ui/darkness.png") center / 100% 100%; }
+.machine-setting-preview[data-setting="maiSensors"] { background-image: url("../../assets/maimai-ui/preview-sensor.png"); opacity: calc(.15 + .85 * var(--setting-value)); }
+.machine-setting-preview[data-setting="volume"], .machine-setting-preview[data-setting="maiComboOpacity"] { background-image: url("../../assets/maimai-ui/blank-preview.png"); }
+.machine-setting-preview[data-setting="volume"]::before { display: block; border-radius: 0; background: url("../../assets/maimai-ui/value-track.png") center / 100% 100%; }
+.machine-setting-preview[data-setting="volume"]::after { border-radius: 0; background: url("../../assets/maimai-ui/value-fill.png") center / 100% 100%; }
+.machine-sparkle { clip-path: none; background: url("../../assets/maimai-ui/sparkle.png") center / contain no-repeat; }
+
+.machine-monitor::before { content: ""; position: absolute; inset: 0; background: var(--ui-monitor) center / 100% 100%; pointer-events: none; z-index: 1; }
+.machine-monitor-cover { left: 2.9%; top: 8.7%; width: 22.4%; border: 0; border-radius: 0; box-shadow: none; z-index: 2; }
+.machine-monitor-copy, .machine-monitor-score { background: none; border: 0; border-radius: 0; box-shadow: none; z-index: 2; }
+.machine-monitor-score { padding: 1cqw 4.2cqw; }
+:is(#machineTitle, [data-source-id="machineTitle"]) { background: none; border-radius: 0; }
+#maiMachine[data-phase="result"] .machine-monitor::before { display: none; }
+:is(#machineSummary, [data-source-id="machineSummary"]) { z-index: 1; }
+:is(#machineSummary, [data-source-id="machineSummary"]) table { background: url("../../assets/maimai-ui/judgments.png") center / 100% 100%; border: 0; }
+:is(#machineSummary, [data-source-id="machineSummary"]) :is(th, td) { background: none; border: 0; }
+.machine-timing div { border-radius: 0; background: url("../../assets/maimai-ui/timing.png") center / 100% 100%; }
+
+/* Stable monitor typography; digit changes never resize or recenter the rate. */
+:is(#machineMonitorDifficulty, [data-source-id="machineMonitorDifficulty"]) {
+  top: 9%; max-width: 74%; overflow: hidden; white-space: nowrap;
+  font-size: 4.3cqw; line-height: 1.15;
+}
+:is(#machineMonitorLevel, [data-source-id="machineMonitorLevel"]) {
+  top: 9%; font-size: 4cqw; line-height: 1.25;
+}
+:is(#machineTitle, [data-source-id="machineTitle"]) {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.5cqw; line-height: 1.25; padding: 0 1.4cqw;
+}
+:is(#machineValueLabel, [data-source-id="machineValueLabel"]) {
+  font-size: 1.9cqw; letter-spacing: .05em; line-height: 1.4;
+}
+:is(#machineValue, [data-source-id="machineValue"]) {
+  position: absolute; inset: 24% 4% 8%; display: flex;
+  align-items: center; justify-content: center; font-size: 8.8cqw;
+  line-height: 1; -webkit-text-stroke: .055cqw #956112;
+  text-shadow: 0 .12cqw 0 #fff9b3, 0 .25cqw .15cqw #110932;
+}
+:is(#machineValue, [data-source-id="machineValue"])[data-rate] {
+  display: grid; grid-template-columns: repeat(3, .66em) .32em repeat(4, .60em) .80em;
+  align-content: center; align-items: baseline; font-kerning: none;
+}
+:is(#machineValue, [data-source-id="machineValue"]) span { text-align: center; min-width: 0; }
+.rate-fraction { font-size: .9em; }
+.rate-percent { font-size: .75em; }

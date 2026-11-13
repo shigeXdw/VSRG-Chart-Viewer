@@ -42,6 +42,15 @@
     "M150 25 L170 -25 L191 25 M158 9 H183",
     "M205 25 V-25 H224 Q243 -25 243 -11 Q243 3 224 3 H206 M224 3 L246 25"
   ];
+  // Reuse the cabinet menu artwork on its canvas-backed result screen.
+  let resultButtons;
+  function loadResultButtons() {
+    return ["back", "next"].map(name => {
+    const image = new Image();
+    image.src = "assets/maimai-ui/button-" + name + ".png";
+    return image;
+    });
+  }
   let word;
   function clearMark(c, age) {
     if (!word) { word = new Path2D(); for (const glyph of lettering) word.addPath(new Path2D(glyph)); }
@@ -199,7 +208,7 @@
     c.restore();
   }
 
-  function result(c, chart, rank, rate, image, elapsed) {
+  function result(c, chart, rank, rate, image, elapsed, cabinet) {
     wheel(c, 0.9 + 0.7 * ease(elapsed / 1.4));
     disc(c, 301, "#23133380");
     // Broad violet sleeve on the left with a narrow two-colour cut edge.
@@ -243,14 +252,26 @@
     label(c, rate.toFixed(4) + "%", 66, 169, 40, "#38203d", 900);
     resultSparkles(c, elapsed);
     ring(c, 297, 2, "#ffa8db");
+    if (cabinet) {
+      resultButtons.forEach((sprite, i) => {
+        if (!sprite.complete || !sprite.naturalWidth) return;
+        c.save();
+        c.globalAlpha *= ease(elapsed / 0.54);
+        c.translate((i ? 1 : -1) * 102.4062, 247.2288);
+        c.rotate((i ? -1 : 1) * Math.PI / 8);
+        c.drawImage(sprite, -70.8, -37.2, 141.6, 74.4);
+        c.restore();
+      });
+    }
   }
-  function draw(c, age, radius, chart, rank, rate, image) {
+  function draw(c, age, radius, chart, rank, rate, image, cabinet = false) {
+    if (cabinet && !resultButtons) resultButtons = loadResultButtons();
     const p = phase(age);
     if (!p || !p.opacity) return;
     c.save(); c.scale(radius / 300, radius / 300);
     c.beginPath(); c.arc(0, 0, 300, 0, tau); c.clip(); c.globalAlpha *= p.opacity;
     if (p.shutter < 1) {
-      if (p.result) result(c, chart, rank, rate, image, age - openAt);
+      if (p.result) result(c, chart, rank, rate, image, age - openAt, cabinet);
       else burst(c, age);
     }
     shutter(c, p.shutter);

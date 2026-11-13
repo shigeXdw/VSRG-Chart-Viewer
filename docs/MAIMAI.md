@@ -4,6 +4,18 @@ Choose a song folder, a ZIP, or an individual `maidata.txt`. The chart selector 
 
 The loader looks beside each chart for `track.mp3`, `track.ogg`, or another supported audio format. It recognizes `bg.png`, `bg.jpg`, and browser-playable videos named `bg`, `pv`, or `mv`. Explicit track, cover, and video filenames take precedence when present. The circular field shows the song jacket or synchronized video. The BGA backdrop switch also fills the surrounding area. Difficulties in the same song share decoded audio and background resources.
 
+## Machine mode
+
+The cabinet uses separate plastic, button and dark-trim materials and a slowly cycling canopy. A small modeled falloff texture adds soft light around the screens and button reflections on the plastic. Lighting uses the original cabinet surface without an extra fascia shell, runtime path tracing or a bloom pass. Reduced-motion preferences stop the canopy cycle. The side pods have a lit outer diffuser, a cyan inner ring and an original perforated face mapped onto the existing mesh. The front canopy uses a soft internal-light falloff. The converted mesh assigns the complete canopy, including its bevels and rear edge, a separate material from the inset speaker panel. The upright side-pod supports and rear housing retain dark, non-emissive materials.
+
+The body has a milky plastic finish; the ring and caps use glossy plastic. TOUCH / TOUCH HOLD, moving slides and their associated starting stars, and available menu controls use a precomputed LED/diffuser glow on the outward-facing button walls and adjacent plastic. Ordinary TAP and HOLD illuminate the entire cap with a broad internal-light pattern and spill around its full perimeter: the inner bezel, side gaps and outer body. The wall pattern approximates a dense LED strip with a broad, smooth inward fade. The channels can overlap independently. A/B touch sensors map to their button direction; D/E share the glow between neighboring directions, while center-C touches do not light the outer ring. Menu colors and angles match their controls. Autoplay lights remain on for 0.5 seconds after release, then fade out over 0.25 seconds.
+
+Enable **Machine mode** on the start page or in the maimai settings. The rotatable DX cabinet has two synchronized circular screens, live top displays and illuminated buttons. Both sides show the selected chart. Import a song folder or pack to browse its available difficulties. **Back** from difficulty selection opens the imported song list.
+
+Drag with the mouse to rotate the cabinet smoothly. **Right-drag** or **Shift-drag** moves it horizontally and vertically, and scrolling zooms. Choose **Reset view** to restore the front view and center the cabinet. Touch supports dragging and pinch zoom. Click or tap the lit ring buttons to navigate. Buttons **6 / 3** move left and right, **5** goes back, and **4** confirms. The keyboard equivalents are **← / →**, **Escape** and **Enter**. Keys **1–8** address the physical positions clockwise from the upper right. Confirm the difficulty and press **Start track** on the ready screen. After the clear animation, press **4** to choose another difficulty. **Escape** during autoplay also returns to selection.
+
+The cabinet geometry is adapted from 藍玉CiAN’s model under **CC BY-NC-SA 4.0**. The model’s noncommercial and ShareAlike conditions apply to the cabinet asset. [Attribution and asset license](../assets/maimai-cabinet/LICENSE.md). Machine mode needs WebGL 2. The flat cabinet remains available as a fallback if 3D initialization fails. MP4 export supports the circular chart view and five cabinet camera presets.
+
 ## AstroDX levels
 
 Use **Open files** for a single level or multi-song collection in an `.adx` or `.adx.zip` archive. **Open folder** also accepts an extracted `levels` directory. When a song includes both `maidata.txt` and the older `maidata_dx.txt`, both sets of difficulties are selectable. The latter carries the **legacy DX** label. The same Simai playback and notation limits apply. [AstroDX archive guide](https://wiki.astrodx.com/en/install/android)
@@ -45,6 +57,12 @@ The browser parser, path geometry, and Canvas sprites are implemented in this re
 - Run `node --test tests/*.test.cjs` for the mechanics tests. The optional Chromium test in `tests/browser-smoke.cjs` also covers ZIP import, selecting difficulties, deterministic redraw after seeking, the inspector, and switching to other formats. The [original demo chart](../tests/fixtures/maimai/maidata.txt) can be used without media.
 
 
+## Machine menus
+
+Machine mode opens an animated difficulty carousel. **Next** opens the ready screen, where the selected chart sits between **Speed & Sound** and **Viewer Options**. Select an options card to adjust the same settings used by the sidebar; changes apply immediately.
+
+Use the illuminated cabinet buttons or the keyboard: Left/Right select, Up/Down adjust, PageUp/PageDown switch settings categories, Enter continues, and Escape goes back. The result screen returns to difficulty selection. The upper display shows achievement during autoplay and a judgment breakdown at the end. Menu artwork uses original PNG sprites, including curved radial buttons, card frames, settings panels and upper-screen frames. Text and values remain live; no arcade menu assets are bundled.
+
 ## Song intro
 
 Play opens a pastel song card with the selected difficulty, level, jacket and chart credits. The complete card stays on screen for three seconds at every song speed. A circular wipe reveals the field before the song clock reaches zero. Pause or scrub anywhere in the intro, or seek to zero to go straight to the chart. Replay includes the intro.
@@ -59,10 +77,20 @@ After the track and final note effect finish, the circular field shows CLEAR. A 
 
 ## Export video
 
-In the maimai settings, choose **Export MP4 · 1080p60**. Drag the progress bar by its header to move it. Choose **Save MP4** when the render finishes, or **Cancel** to discard a running export.
+In the maimai settings, select an **Export camera**, then choose **Export MP4**. **Current mode · automatic** uses the left-angle cabinet view in machine mode and the flat playfield otherwise. Drag the progress bar by its header to move it. Choose **Save MP4** when the render finishes, or **Cancel** to discard a running export.
 
-The export renders the selected difficulty from the intro through the final result at 1920 × 1080 and 60 frames per second. The video encoder targets 32 Mbps (about 240 MB per minute of video at that rate). Actual size depends on the encoder and scene. It uses the playback speed, pitch setting, volume, hitsound switch and maimai playfield settings selected at the start. Extra info appears when enabled. The area outside the circular stage is black. Include the song's audio, image and video files when opening a local chart. Mai Notes imports can use the viewer's hitsounds.
+The export renders the selected difficulty from the intro through the final result at 60 frames per second.
+
+| Camera | Resolution |
+| --- | --- |
+| Playfield | 1920 × 1080 |
+| Left angle (B), right angle, centered station | 1080 × 1920 portrait |
+| Both centered, both angled | 1920 × 1080 landscape |
+
+Cabinet presets use fixed cameras with a longer lens. The right view changes the camera position without mirroring the chart. Both-station views show the same selected chart on each station. The upper displays and button lighting follow the export timeline. Rendering uses a separate scene and leaves the live camera and playback position unchanged. Cabinet exports include model attribution; the cabinet asset’s license still applies.
+
+The video encoder targets 32 Mbps (about 240 MB per minute of video at that rate). Actual size depends on the encoder and scene. It uses the playback speed, pitch setting, volume, hitsound switch and maimai playfield settings selected at the start. Extra info appears when enabled in playfield exports; cabinet exports use the upper display. The surrounding background is black. Include the song's audio, image and video files when opening a local chart. Mai Notes imports can use the viewer's hitsounds.
 
 Rendering takes place locally. For 1080p60 video the exporter first requests hardware encoding for H.264, VP9 and AV1, in that order. If the browser reports no matching configuration, it tries the browser defaults. The progress bar shows the selected codec and preference. The browser controls which encoder fulfills the request. Audio is mixed separately and stored as AAC, Opus or PCM.
 
-The optional `node tests/maimai-export.cjs` check creates a short chart and media locally, downloads the export, and verifies its frame count, dimensions, audio and black border. It uses the same Playwright configuration as the browser smoke test and requires FFmpeg and ffprobe on PATH.
+The optional `node tests/maimai-export.cjs` check creates a short chart and media locally, downloads the export, and verifies its frame count, dimensions, audio and black border. Set `EXPORT_CAMERA=left`, `right`, `center`, `both` or `angled` to check a cabinet preset instead of the flat view. Set `BROWSER=firefox` and `BROWSER_EXE` to use Firefox. It uses the same Playwright configuration as the browser smoke test and requires FFmpeg and ffprobe on PATH.

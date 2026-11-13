@@ -28,8 +28,9 @@
     return field;
   }
 
+  const cameraLength = Math.hypot(1140, 2386);
+  const fy = -1140 / cameraLength, fz = -2386 / cameraLength;
   function project(field, lane, depth, elevation = 0) {
-    const length = Math.hypot(1140, 2386), fy = -1140 / length, fz = -2386 / length;
     const worldHeight = elevation * 466 / 16;
     const y = worldHeight - 850, z = -depth * WARP_DEPTH - 856 - worldHeight * AIR_DEPTH_PER_HEIGHT;
     const cameraDepth = Math.max(16, y * fy + z * fz);
@@ -249,7 +250,11 @@
     // while projection is recomputed continuously at the actual chart time.
     const phase = arrow || type === "x" ? Math.floor(((time % 1.6 + 1.6) % 1.6) * 10) : 0;
     const key = [type, worldWidth, arrow ? direction[0] : direction, color, phase, arrow].join(":");
-    if (cache.has(key)) return cache.get(key);
+    const hit = cache.get(key);
+    if (hit) {
+      cache.delete(key); cache.set(key, hit);
+      return hit;
+    }
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil((worldWidth + margin * 2) * 2);
     canvas.height = Math.ceil((worldHeight + margin * 2) * 2);
@@ -501,11 +506,21 @@
     }
   }
 
+  const fittedLabels = new WeakMap();
   function fitText(ctx, text, maxWidth) {
     text = String(text || "");
-    if (ctx.measureText(text).width <= maxWidth) return text;
-    while (text.length && ctx.measureText(text + "…").width > maxWidth) text = text.slice(0, -1);
-    return text + "…";
+    let cache = fittedLabels.get(ctx);
+    if (!cache) { cache = new Map(); fittedLabels.set(ctx, cache); }
+    const key = JSON.stringify([ctx.font, maxWidth, text]);
+    if (cache.has(key)) return cache.get(key);
+    let result = text;
+    if (ctx.measureText(result).width > maxWidth) {
+      while (result && ctx.measureText(result + "…").width > maxWidth) result = result.slice(0, -1);
+      result += "…";
+    }
+    if (cache.size >= 128) cache.delete(cache.keys().next().value);
+    cache.set(key, result);
+    return result;
   }
 
   const hudNumber = new Intl.NumberFormat("en-US");
@@ -616,7 +631,10 @@
         const point = window.UgcCurves.sampleAtTime(path, visualTime, chart);
         addHead(point, path.type, path.color);
       }
-      for (const point of path.points.slice(1)) if (point.type === "s" && point.time >= visualTime) addHead(point, path.type, path.color);
+      const points = path.points;
+      for (let i = Math.max(1, lowerBound(points, visualTime)); i < points.length && points[i].time <= until; i++) {
+        if (points[i].type === "s") addHead(points[i], path.type, path.color);
+      }
       const ticks = path.tickNotes || [];
       for (let i = lowerBound(ticks, visualTime); i < ticks.length && ticks[i].time <= until; i++) addHead(ticks[i], "C", path.color);
     }

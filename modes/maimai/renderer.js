@@ -998,6 +998,7 @@
     videoFrameTime,
     outerColor = "#101011",
     bottomInset = 48,
+    cabinetGlass = false,
     infoScale = 1,
     jacket,
     mediaDarkness = 0.82,
@@ -1015,7 +1016,7 @@
     const fieldHeight = usableHeight - footer;
     const shortSide = Math.min(fieldWidth, fieldHeight);
     if (shortSide <= 0) return;
-    const padding = Math.min(24, Math.max(10, shortSide * 0.035), shortSide / 4);
+    const padding = cabinetGlass ? 0 : Math.min(24, Math.max(10, shortSide * 0.035), shortSide / 4);
     const R = (shortSide - 2 * padding) / backgroundDiameter;
     const cx = Math.min(width / 2, fieldWidth - padding - backgroundRadius * R),
       cy = fieldHeight / 2,
@@ -1085,7 +1086,7 @@
     if (time < 0) window.MaiIntro.draw(ctx, chart, time, backgroundRadius, jacket);
     if (age >= 0) {
       const rank = ranks.find(([threshold]) => rates.deluxe >= threshold)?.[1] || "D";
-      window.MaiClear.draw(ctx, age, backgroundRadius, chart, rank, rates.deluxe, jacket);
+      window.MaiClear.draw(ctx, age, backgroundRadius, chart, rank, rates.deluxe, jacket, cabinetGlass);
     }
     ctx.restore();
     if (maiExtraInfo) {

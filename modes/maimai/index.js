@@ -97,7 +97,10 @@
       if (/^maidata_dx\.txt$/i.test(file.name)) {
         for (const chart of charts) chart.legacyDx = true;
       }
-      charts.forEach(window.MaiAudio.attach);
+      for (const chart of charts) {
+        chart.songFolder = chartPath.slice(0, chartPath.lastIndexOf("/") + 1);
+        window.MaiAudio.attach(chart);
+      }
       return charts;
     },
     drawPlayfield: (options) => window.MaiRenderer.draw(options),
