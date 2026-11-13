@@ -1,96 +1,125 @@
 # maimai / Simai
 
-Choose a song folder, a ZIP, or an individual `maidata.txt`. The chart selector lists each populated `&inote_N` with its difficulty and level. When selecting individual files, include the track and background files for media playback. A ZIP may contain several song folders with identically named tracks.
+Open a song folder, ZIP file, or `maidata.txt` to load a chart. You can choose any available difficulty. If you're loading a single chart file, make sure to include its audio and background files too.
 
-The loader looks beside each chart for `track.mp3`, `track.ogg`, or another supported audio format. It recognizes `bg.png`, `bg.jpg`, and browser-playable videos named `bg`, `pv`, or `mv`. Explicit track, cover, and video filenames take precedence when present. The circular field shows the song jacket or synchronized video. The BGA backdrop switch also fills the surrounding area. Difficulties in the same song share decoded audio and background resources.
+The viewer looks for files such as `track.mp3`, `track.ogg`, `bg.png`, `bg.jpg`, and videos named `bg`, `pv`, or `mv`. If the chart specifies filenames, those are used first. The song jacket or video appears behind the notes, and **BGA backdrop** can extend it outside the playfield. Songs with multiple difficulties reuse the same media.
 
 ## Machine mode
 
-The cabinet uses separate plastic, button and dark-trim materials and a slowly cycling canopy. A small modeled falloff texture adds soft light around the screens and button reflections on the plastic. Lighting uses the original cabinet surface without an extra fascia shell, runtime path tracing or a bloom pass. Reduced-motion preferences stop the canopy cycle. The side pods have a lit outer diffuser, a cyan inner ring and an original perforated face mapped onto the existing mesh. The front canopy uses a soft internal-light falloff. The converted mesh assigns the complete canopy, including its bevels and rear edge, a separate material from the inset speaker panel. The upright side-pod supports and rear housing retain dark, non-emissive materials.
+**Machine mode** adds a 3D maimai DX cabinet with two synchronized screens, working top displays, and light-up buttons. Both screens play the selected chart. Enable it from the start page or maimai settings.
 
-The body has a milky plastic finish; the ring and caps use glossy plastic. TOUCH / TOUCH HOLD, moving slides and their associated starting stars, and available menu controls use a precomputed LED/diffuser glow on the outward-facing button walls and adjacent plastic. Ordinary TAP and HOLD illuminate the entire cap with a broad internal-light pattern and spill around its full perimeter: the inner bezel, side gaps and outer body. The wall pattern approximates a dense LED strip with a broad, smooth inward fade. The channels can overlap independently. A/B touch sensors map to their button direction; D/E share the glow between neighboring directions, while center-C touches do not light the outer ring. Menu colors and angles match their controls. Autoplay lights remain on for 0.5 seconds after release, then fade out over 0.25 seconds.
+The cabinet has a slightly translucent plastic body, glossy buttons, and separate dark trim. The canopy and side speakers have soft lighting, including a cyan speaker ring. The canopy slowly changes brightness unless reduced motion is enabled.
 
-Enable **Machine mode** on the start page or in the maimai settings. The rotatable DX cabinet has two synchronized circular screens, live top displays and illuminated buttons. Both sides show the selected chart. Import a song folder or pack to browse its available difficulties. **Back** from difficulty selection opens the imported song list.
+Button lights react to notes and menu inputs. TAP and HOLD light up the full button, while TOUCH, TOUCH HOLD, and slides light the surrounding plastic. Multiple lights can work at once. A/B touches light the matching direction, D/E touches light between buttons, and center touches don't light the outer ring. During autoplay, lights stay on for 0.5 seconds after release and fade out over the next 0.25 seconds.
 
-Drag with the mouse to rotate the cabinet smoothly. **Right-drag** or **Shift-drag** moves it horizontally and vertically, and scrolling zooms. Choose **Reset view** to restore the front view and center the cabinet. Touch supports dragging and pinch zoom. Click or tap the lit ring buttons to navigate. Buttons **6 / 3** move left and right, **5** goes back, and **4** confirms. The keyboard equivalents are **← / →**, **Escape** and **Enter**. Keys **1–8** address the physical positions clockwise from the upper right. Confirm the difficulty and press **Start track** on the ready screen. After the clear animation, press **4** to choose another difficulty. **Escape** during autoplay also returns to selection.
+**Controls:**
 
-The cabinet geometry is adapted from 藍玉CiAN’s model under **CC BY-NC-SA 4.0**. The model’s noncommercial and ShareAlike conditions apply to the cabinet asset. [Attribution and asset license](../assets/maimai-cabinet/LICENSE.md). Machine mode needs WebGL 2. The flat cabinet remains available as a fallback if 3D initialization fails. MP4 export supports the circular chart view and five cabinet camera presets.
+- **Drag:** Rotate the cabinet.
+- **Right-drag / Shift-drag:** Move the cabinet.
+- **Scroll:** Zoom in or out.
+- **Reset view:** Return to the default angle.
+- **Buttons 6 / 3** or **Left / Right:** Change selection.
+- **Button 5** or **Escape:** Go back.
+- **Button 4** or **Enter:** Confirm.
+- **Keys 1–8:** Press the corresponding cabinet buttons, numbered clockwise from the upper right.
 
-## AstroDX levels
+Touch controls also support dragging and pinch zoom. Pick a difficulty, then press **Start track**. After the results, press **4** to select another difficulty. You can also press **Escape** during autoplay to return to selection.
 
-Use **Open files** for a single level or multi-song collection in an `.adx` or `.adx.zip` archive. **Open folder** also accepts an extracted `levels` directory. When a song includes both `maidata.txt` and the older `maidata_dx.txt`, both sets of difficulties are selectable. The latter carries the **legacy DX** label. The same Simai playback and notation limits apply. [AstroDX archive guide](https://wiki.astrodx.com/en/install/android)
+The 3D cabinet is adapted from 藍玉CiAN’s model and uses the **CC BY-NC-SA 4.0** license. See the [asset license](../assets/maimai-cabinet/LICENSE.md). Machine mode requires WebGL 2. If 3D doesn't work, the flat view is still available. MP4 export also supports five cabinet camera presets.
 
-## Reading the field
+## AstroDX support
 
-Button 1 is just right of twelve o’clock. Numbers increase clockwise. Taps move outward to the white judgment ring. A hold stays at the ring until its tail arrives. The sensor point appears first. The four touch petals fade in at their starting positions during the first fifth of the approach, then accelerate inward. A touch hold stays closed while its gauge fills. Gold marks simultaneous notes, orange marks BREAK, and an additional bright outline marks EX. A moving star consumes slide chevrons along the authored path. The center combo counts taps on contact and holds, touch holds and slides on completion. The upper arc shows the autoplay achievement and rank. The frame blends between rank colors over the song: violet at D, blue at B, green at A, silver at S and gold at SSS. The rank badge animates on promotion, and the cyan achievement gauge marks CLEAR at 80%. Achievement weights each judgment by note type and includes a bonus of up to one percentage point for BREAKs. The viewer autoplays every judgment.
+You can open `.adx` and `.adx.zip` files through **Open files**, or load an extracted `levels` folder with **Open folder**. If a song includes both `maidata.txt` and `maidata_dx.txt`, both are available. Older DX charts are labeled **legacy DX**.
 
-**Extra info** shows the FiNALE and DELUXE achievement rates, judged and total notes by type, and the chart clock. BREAKs are counted separately. Touch holds count as holds. The setting starts off and is remembered in this browser.
+The same Simai format support and limitations apply. See the [AstroDX archive guide](https://wiki.astrodx.com/en/install/android).
 
-The Playfield settings adjust blur and darkness behind the notes, the visibility of the sensor pattern, and hit effects. The blur control is available for songs with a background image or video. These preferences are saved separately for maimai.
+## Playfield
 
-The maimai approach-speed control changes visibility and travel time. Song speed, pause, seek and audio use the common player. Seeking into a slide, a hold or a waiting star reconstructs its position from chart time. The inspector unfolds buttons 1–8 into columns and labels the touch sensors. Its slide lines show button endpoints and timing. The circular player shows the actual path.
+Buttons are numbered clockwise, starting with **1** just to the right of the top. Notes move toward the white judgment ring. Holds stay on the ring until they end, while slides follow their charted paths.
 
-## Autoplay feedback
+Gold notes are simultaneous hits, orange notes are BREAKs, and EX notes have an extra bright outline. Touch notes use a four-petal animation, and touch holds show a filling gauge. Slide stars move along the slide markers.
 
-The player synthesizes its own tap, EX, BREAK, touch, slide and firework sounds. A hold sounds at contact and release. A touch hold sustains until release. Seeking into one resumes its sustained sound. **Hitsounds** toggles these cues.
+The center shows your combo, and the top arc shows autoplay achievement and rank. The border changes color as the rank increases, from violet at D to gold at SSS. **CLEAR** is marked at 80%. BREAK notes can add up to 1% bonus achievement. All notes are judged automatically.
 
-**Hit effects** toggles judgment flashes and button lights. Firework-marked notes always emit rainbow rays on judgment, including in MP4 exports. Seeking reconstructs both the animation and the combo from chart time.
+Turn on **Extra info** to see FiNALE and DELUXE achievement, note counts, and chart time. BREAK notes are listed separately, and touch holds count as holds. This option is off by default and your choice is saved.
 
-## Notation
+The **Playfield** settings let you change background darkness, blur, sensor visibility, and hit effects. Blur requires a background image or video. You can also adjust note approach speed separately from song speed.
 
-- Song title, artist, difficulty levels and designers, the first-beat offset, BPM changes, subdivisions, and comma rests.
-- Numbered taps and compact chords, slash-separated simultaneous notes, and backtick-separated pseudo-EACH groups.
-- Holds, BREAK and EX modifiers, forced stars, A/B/C/D/E touches, touch holds and firework effects.
-- Straight, circular, V, zigzag, loop and fan slides using `-`, `<`, `>`, `^`, `v`, `V`, `s`, `z`, `p`, `q`, `pp`, `qq`, and `w`. A fan has three tracing stars. `*` shares a head between tracks. `?` and `!` omit the approaching star head.
-- The viewer recognizes mine markers on notes and slide paths, trailing firework markers on touch holds, and negative subdivisions that place subsequent notes earlier in the song. Mines use a separate color and autoplay avoids their hit cues.
-- Slide movement defaults to a one-beat wait. Brackets accept subdivision ratios, BPM overrides, seconds, and explicit wait/duration pairs such as `[0.25##1.5]`. Connected slides accept a duration per segment or one duration for the whole path. The latter is divided by path length.
-- Positive `<HS*…>` approach multipliers, `&mv_wait`, and `&mv_seek`. Unsupported tokens produce line-numbered chart diagnostics in the player settings.
+Pausing and seeking work as usual. Seeking into a hold, slide, or waiting star places it at the correct point in the chart. The inspector shows buttons 1–8 as columns, with touch sensors and slide timing. The circular view shows the actual slide shapes.
 
-## Reference and validation
+## Hitsounds and effects
 
-The browser parser, path geometry, and Canvas sprites are implemented in this repository. The viewer draws its own note artwork using the FiNALE skin as a visual reference for the open rings, five-point stars, hold caps, and colored touch petals. [FiNALE skin reference](https://github.com/TeamMajdata/MajdataPlay_Build/tree/e8c0cd301f52847e5d7436c0575984742c646933/Skins/FiNALE) MajdataPlay served as a behavior reference. Its Unity code, parser binary, sample songs and artwork are external to the viewer.
+The viewer generates its own sounds for TAP, EX, BREAK, TOUCH, slides, holds, and fireworks. Holds play sounds when they start and end; touch holds have a continuous sound. Seeking into a touch hold resumes that sound.
 
-- MajSimai supplies song metadata, difficulty slots, timing points and note properties. MajdataPlay’s song storage and game manager supply folder conventions, chart offsets and video timing. [Song storage](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Misc/Base/SongStorage.cs) · [Game manager](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Scenes/Game/GamePlayManager.cs)
-- The reference note loader schedules heads and traces separately. The slide translator and geometry describe button orientation, arcs, loops and connected tracks. [Note loader](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Scenes/Game/NoteLoader.cs) · [Slide translator](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Scenes/Game/Misc/Parsing/SimaiSlideTranslator.cs) · [Simai notation](https://w.atwiki.jp/simai/pages/1003.html)
-- An external comparison ran MajSimai 3.0.1 from that revision against all 14 included original-song charts. Across 41 difficulties, all 22,158 objects matched on type, button or center sensor, and onset within 0.1 ms, and on hold duration, slide start and slide duration within 1 ms. This comparison covers parsing and timing. The viewer generates its own artwork and samples slide paths by distance. Unity frame-for-frame appearance and proprietary extensions such as extended slide code and scripted scenes are outside this validation.
-- Six slide centerlines were checked against the ordered marker positions in the reference prefabs. At equal fractions of path length, the largest observed distance ranged from less than 0.1% of the judgment radius for the straight line and outer arc to about 3.7% for the zigzag. The viewer uses analytical turns and distance sampling rather than importing those prefab coordinates.
-- Run `node --test tests/*.test.cjs` for the mechanics tests. The optional Chromium test in `tests/browser-smoke.cjs` also covers ZIP import, selecting difficulties, deterministic redraw after seeking, the inspector, and switching to other formats. The [original demo chart](../tests/fixtures/maimai/maidata.txt) can be used without media.
+Use **Hitsounds** to turn the sounds on or off, and **Hit effects** to toggle flashes and button lighting. Firework notes still show rainbow effects, including in exported videos. Seeking also updates the combo and effects to match the chart time.
 
+## Supported Simai notation
+
+- Song metadata, difficulty levels, chart designers, offsets, BPM changes, subdivisions, and rests.
+- Taps, chords, simultaneous notes (`/`), and pseudo-EACH groups (backticks).
+- HOLD, BREAK, EX, forced stars, A/B/C/D/E touch notes, touch holds, and fireworks.
+- Straight, curved, V-shaped, zigzag, loop, and fan slides: `-`, `<`, `>`, `^`, `v`, `V`, `s`, `z`, `p`, `q`, `pp`, `qq`, and `w`.
+- Shared slide heads (`*`) and slides without an approaching star (`?` and `!`). Fan slides use three stars.
+- Mine markers, firework markers on touch holds, and negative subdivisions. Mines have their own color and don't play hit cues.
+- Slide timings in subdivisions, BPM, seconds, or wait/duration pairs such as `[0.25##1.5]`. Connected slides can have separate timings or share one total duration based on path length. Slides normally wait one beat before moving.
+- Positive `<HS*…>` multipliers, `&mv_wait`, and `&mv_seek`.
+
+Unsupported notation is reported in the player settings with the chart line number.
+
+## References and testing
+
+The viewer uses its own Simai parser, slide paths, and note graphics. The artwork takes inspiration from the [FiNALE skin](https://github.com/TeamMajdata/MajdataPlay_Build/tree/e8c0cd301f52847e5d7436c0575984742c646933/Skins/FiNALE), while MajdataPlay was used to check how charts behave. The viewer doesn't bundle MajdataPlay's Unity code, parser, example songs, or artwork.
+
+Useful references include [song storage](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Misc/Base/SongStorage.cs), [game manager](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Scenes/Game/GamePlayManager.cs), [note loader](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Scenes/Game/NoteLoader.cs), [slide translator](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Scenes/Game/Misc/Parsing/SimaiSlideTranslator.cs), and the [Simai notation guide](https://w.atwiki.jp/simai/pages/1003.html).
+
+The parser was compared against MajSimai 3.0.1 using 14 included songs, 41 difficulties, and 22,158 notes. Note types and positions matched, with start times within 0.1 ms and hold/slide timings within 1 ms. This checks parsing and timing, not exact Unity visuals or special proprietary chart features.
+
+Six slide shapes were also compared with the reference prefabs. Differences ranged from under 0.1% of the judgment radius for straight and outer-arc slides to around 3.7% for zigzags.
+
+Run `node --test tests/*.test.cjs` for the main tests. The optional browser test at `tests/browser-smoke.cjs` checks ZIP imports, difficulty selection, seeking, the inspector, and format switching. A [demo chart](../tests/fixtures/maimai/maidata.txt) is included and works without media.
 
 ## Machine menus
 
-Machine mode opens an animated difficulty carousel. **Next** opens the ready screen, where the selected chart sits between **Speed & Sound** and **Viewer Options**. Select an options card to adjust the same settings used by the sidebar; changes apply immediately.
+Machine mode has an animated difficulty menu. Press **Next** to open the ready screen, where you can change **Speed & Sound** or **Viewer Options**. These are the same settings as the sidebar, and changes apply immediately.
 
-Use the illuminated cabinet buttons or the keyboard: Left/Right select, Up/Down adjust, PageUp/PageDown switch settings categories, Enter continues, and Escape goes back. The result screen returns to difficulty selection. The upper display shows achievement during autoplay and a judgment breakdown at the end. Menu artwork uses original PNG sprites, including curved radial buttons, card frames, settings panels and upper-screen frames. Text and values remain live; no arcade menu assets are bundled.
+Use **Left/Right** to select, **Up/Down** to change a value, **PageUp/PageDown** to switch settings categories, **Enter** to continue, and **Escape** to go back. The cabinet buttons work too.
+
+The upper screen shows achievement during autoplay and a note breakdown afterward. The menus use original PNG graphics, not extracted arcade assets, and the text and values update live.
 
 ## Song intro
 
-Play opens a pastel song card with the selected difficulty, level, jacket and chart credits. The complete card stays on screen for three seconds at every song speed. A circular wipe reveals the field before the song clock reaches zero. Pause or scrub anywhere in the intro, or seek to zero to go straight to the chart. Replay includes the intro.
+Before a chart starts, a song card shows its jacket, difficulty, level, and credits for three seconds, regardless of song speed. A circular transition then reveals the playfield.
 
-![Song card and iris transition for the Orbit Study demo](images/mai-intro.gif)
+You can pause or seek during the intro, or skip it by seeking to zero. **Replay** starts from the intro again.
 
-## Autoplay clear
+![Song card and intro transition](images/mai-intro.gif)
 
-After the track and final note effect finish, the circular field shows CLEAR. A diagonal shutter closes, holds for one chart second, and opens onto the result. The song panel uses the loaded jacket when available. The rows show the chart’s TAP, HOLD, SLIDE, TOUCH and BREAK totals and shares; the bottom strip shows the final autoplay DELUXE rate. Seeking back restores the playfield, and Replay starts the chart again.
+## Clear screen and results
 
-![Clear animation, diagonal shutter and autoplay result for the viewer demo](images/mai-clear.gif)
+When the song ends and the last note effect finishes, **CLEAR** appears. A diagonal shutter closes, pauses for one chart second, then opens to the result screen.
 
-## Export video
+The results show the song jacket, TAP/HOLD/SLIDE/TOUCH/BREAK counts and percentages, and the final DELUXE achievement. Seeking backward returns to the playfield, while **Replay** restarts the chart.
 
-In the maimai settings, select an **Export camera**, then choose **Export MP4**. **Current mode · automatic** uses the left-angle cabinet view in machine mode and the flat playfield otherwise. Drag the progress bar by its header to move it. Choose **Save MP4** when the render finishes, or **Cancel** to discard a running export.
+![Clear animation and results](images/mai-clear.gif)
 
-The export renders the selected difficulty from the intro through the final result at 60 frames per second.
+## MP4 export
+
+Select an **Export camera** in the maimai settings, then click **Export MP4**. With **Current mode · automatic**, machine mode uses the left-angle cabinet camera and normal mode uses the flat playfield.
+
+Exports include the intro, chart, and results at **60 FPS**.
 
 | Camera | Resolution |
 | --- | --- |
 | Playfield | 1920 × 1080 |
-| Left angle (B), right angle, centered station | 1080 × 1920 portrait |
-| Both centered, both angled | 1920 × 1080 landscape |
+| Left angle (B), right angle, center station | 1080 × 1920 (portrait) |
+| Both centered, both angled | 1920 × 1080 (landscape) |
 
-Cabinet presets use fixed cameras with a longer lens. The right view changes the camera position without mirroring the chart. Both-station views show the same selected chart on each station. The upper displays and button lighting follow the export timeline. Rendering uses a separate scene and leaves the live camera and playback position unchanged. Cabinet exports include model attribution; the cabinet asset’s license still applies.
+The camera presets use fixed positions. The right-side camera doesn't mirror the chart, and both-screen views show the same chart on each side. The cabinet lights and top displays are included. Exporting doesn't change your current camera or playback position, and cabinet videos include the model attribution.
 
-The video encoder targets 32 Mbps (about 240 MB per minute of video at that rate). Actual size depends on the encoder and scene. It uses the playback speed, pitch setting, volume, hitsound switch and maimai playfield settings selected at the start. Extra info appears when enabled in playfield exports; cabinet exports use the upper display. The surrounding background is black. Include the song's audio, image and video files when opening a local chart. Mai Notes imports can use the viewer's hitsounds.
+Video is targeted at **32 Mbps**, or roughly **240 MB per minute**, although actual file sizes vary. Exports use the song speed, pitch, volume, hitsounds, and playfield settings selected when rendering starts. The background outside the playfield is black. For local charts, include the audio, image, and video files. Mai Notes imports can use the built-in hitsounds.
 
-Rendering takes place locally. For 1080p60 video the exporter first requests hardware encoding for H.264, VP9 and AV1, in that order. If the browser reports no matching configuration, it tries the browser defaults. The progress bar shows the selected codec and preference. The browser controls which encoder fulfills the request. Audio is mixed separately and stored as AAC, Opus or PCM.
+Rendering runs in your browser. For 1080p60, it first tries hardware encoding with **H.264**, **VP9**, then **AV1**. If none is available, it falls back to browser defaults. The progress bar shows the codec being used. Audio is handled separately as AAC, Opus, or PCM.
 
-The optional `node tests/maimai-export.cjs` check creates a short chart and media locally, downloads the export, and verifies its frame count, dimensions, audio and black border. Set `EXPORT_CAMERA=left`, `right`, `center`, `both` or `angled` to check a cabinet preset instead of the flat view. Set `BROWSER=firefox` and `BROWSER_EXE` to use Firefox. It uses the same Playwright configuration as the browser smoke test and requires FFmpeg and ffprobe on PATH.
+Move the export progress window by dragging its header. When finished, click **Save MP4**, or use **Cancel** to stop an export.
+
+For testing, run `node tests/maimai-export.cjs`. It checks the exported video's frames, resolution, audio, and borders. Use `EXPORT_CAMERA=left`, `right`, `center`, `both`, or `angled` to test cabinet views. For Firefox, set `BROWSER=firefox` and `BROWSER_EXE`. The test requires FFmpeg and ffprobe on PATH.
