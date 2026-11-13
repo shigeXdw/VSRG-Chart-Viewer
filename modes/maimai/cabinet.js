@@ -39,7 +39,7 @@
     options.host.append(status);
     loading = (async () => {
       await Promise.all([
-        window.MaiThree || script("vendor/three.min.js?v=2"),
+        window.MaiThree || script("vendor/three.min.js?v=3"),
         window.MaiCabinetMesh || script("assets/maimai-cabinet/mesh.js?v=12")
       ]);
       if (enabled) {
@@ -375,10 +375,16 @@
     texture.minFilter = T.LinearFilter;
     texture.generateMipmaps = false;
     const displayMaterial = new T.MeshBasicMaterial({ map: texture, toneMapped: false });
-    const monitorTexture = exportOptions ? new T.CanvasTexture(exportOptions.monitorCanvas) : null;
+    // Upload explicit RGBA pixels for the export monitor. This avoids relying
+    // on offscreen 2D-canvas / WebGL interop while the live cabinet also renders.
+    const monitorTexture = exportOptions ? new T.DataTexture(
+      new Uint8Array(exportOptions.monitorCanvas.width * exportOptions.monitorCanvas.height * 4),
+      exportOptions.monitorCanvas.width, exportOptions.monitorCanvas.height
+    ) : null;
     if (monitorTexture) {
       monitorTexture.colorSpace = T.SRGBColorSpace;
-      monitorTexture.minFilter = T.LinearFilter;
+      monitorTexture.minFilter = monitorTexture.magFilter = T.LinearFilter;
+      monitorTexture.flipY = true;
       monitorTexture.generateMipmaps = false;
     }
     const screenMeshes = [],
@@ -540,9 +546,12 @@
         light(index, power, color, kind) {
           (kind === "wall" ? wallColors : lampColors)[index].set(color).multiplyScalar(power);
         },
-        render(seconds) {
+        render(seconds, monitorPixels) {
           dirtyTexture = true;
-          monitorTexture.needsUpdate = true;
+          if (monitorPixels) {
+            monitorTexture.image.data = monitorPixels.data;
+            monitorTexture.needsUpdate = true;
+          }
           renderScene(seconds * 1000);
           return renderer.domElement;
         },
@@ -746,7 +755,7 @@
     async createExport(canvas, monitorCanvas, preset) {
       if (!presets[preset]) throw new Error("Unknown machine camera preset.");
       await Promise.all([
-        window.MaiThree || script("vendor/three.min.js?v=2"),
+        window.MaiThree || script("vendor/three.min.js?v=3"),
         window.MaiCabinetMesh || script("assets/maimai-cabinet/mesh.js?v=12")
       ]);
       const host = document.createElement("div"), menu = document.createElement("div");
