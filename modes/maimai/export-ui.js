@@ -1,6 +1,8 @@
 (function () {
   "use strict";
   function bind(snapshot) {
+    const camera = byId("Camera");
+    if (!panel || !handle || !start || !camera) return;
     const byId = id => document.getElementById("maiExport" + id);
     const panel = byId("Panel"), handle = byId("Handle"), start = byId("Start");
     const status = byId("Status"), percent = byId("Percent"), bar = byId("Progress");
