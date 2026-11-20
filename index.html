@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VSRG Chart Viewer</title>
   <link rel="stylesheet" href="styles.css?v=49">
-  <link rel="stylesheet" href="modes/maimai/machine.css?v=12">
+  <link rel="stylesheet" href="modes/maimai/machine.css?v=13">
   <link rel="stylesheet" href="assets/maimai-ui/themes.css?v=1">
   <link rel="stylesheet" href="modes/maimai/machine-sprites.css?v=4">
 </head>
@@ -76,7 +76,6 @@
         <button id="startFiles" type="button">Open files</button>
         <button id="maiNotesOpen" aria-label="Mai Notes" type="button" aria-haspopup="dialog" title="Browse Mai Notes"><img class="mai-notes-logo" src="https://mai-notes.com/image/logo.png" referrerpolicy="no-referrer" alt="" width="96" height="34" hidden><span>Mai Notes</span></button>
       </div>
-      <label class="machine-start-option"><input id="maiMachineStartSetting" type="checkbox"> Machine mode <small>maimai</small></label>
       <p id="startStatus" role="status"></p>
     </section>
   </main>
@@ -172,16 +171,16 @@
       <section class="settings">
           <div id="maiSettings" class="setting-group" hidden>
             <h2>maimai</h2>
-            <label class="switch-row"><span>Machine mode</span><input id="maiMachineSetting" type="checkbox"><i aria-hidden="true"></i></label>
+            <label class="switch-row"><span>Virtual Cabinet mode</span><input id="maiMachineSetting" type="checkbox"><i aria-hidden="true"></i></label>
             <label class="switch-row"><span>Extra info</span><input id="maiExtraInfo" type="checkbox"><i aria-hidden="true"></i></label>
             <label><span>Approach speed</span><input id="maiSpeed" type="range" min="1" max="10" step="0.25" value="4"><output id="maiSpeedValue" for="maiSpeed">4</output></label>
             <label><span>Export camera</span><select id="maiExportCamera">
               <option value="auto">Current mode · automatic</option>
               <option value="flat">Playfield · landscape</option>
-              <optgroup label="Machine · 1080 × 1920 portrait">
+              <optgroup label="Cabinet · 1080 × 1920 portrait">
                 <option value="left">Left angle (B)</option><option value="right">Right angle</option><option value="center">Centered station</option>
               </optgroup>
-              <optgroup label="Machine · 1920 × 1080 landscape">
+              <optgroup label="Cabinet · 1920 × 1080 landscape">
                 <option value="both">Both centered</option><option value="angled">Both angled</option>
               </optgroup>
             </select></label>
@@ -494,13 +493,13 @@
   <script src="modes/maimai/geometry.js?v=1"></script>
   <script src="modes/maimai/parser.js?v=8"></script>
   <script src="modes/maimai/intro.js?v=3"></script>
-  <script src="modes/maimai/machine-export.js?v=2"></script>
+  <script src="modes/maimai/machine-export.js?v=3"></script>
   <script src="modes/maimai/export.js?v=5"></script>
-  <script src="modes/maimai/export-ui.js?v=2"></script>
+  <script src="modes/maimai/export-ui.js?v=3"></script>
   <script src="modes/maimai/clear.js?v=4"></script>
-  <script src="modes/maimai/cabinet.js?v=28"></script>
+  <script src="modes/maimai/cabinet.js?v=29"></script>
   <script src="modes/maimai/machine-settings.js?v=2"></script>
-  <script src="modes/maimai/machine.js?v=17"></script>
+  <script src="modes/maimai/machine.js?v=18"></script>
   <script src="modes/maimai/renderer.js?v=41"></script>
   <script src="modes/maimai/audio.js?v=5"></script>
   <script src="modes/maimai/index.js?v=8"></script>

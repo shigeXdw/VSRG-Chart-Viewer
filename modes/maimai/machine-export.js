@@ -25,7 +25,7 @@
     signal.throwIfAborted();
     const monitor = document.createElement("canvas");
     monitor.width = 900; monitor.height = 350;
-    const c = monitor.getContext("2d", {alpha:false});
+    const c = monitor.getContext("2d", {alpha:false, willReadFrequently:true});
     const cabinet = await MaiCabinet.createExport(field, monitor, job.machineCamera);
     if (signal.aborted) { cabinet.dispose(); signal.throwIfAborted(); }
     const end = MaiClear.end(chart), counts = chart.statsAt(Infinity, chart.noteCount).counts;
@@ -43,7 +43,7 @@
       const rate = (chart.achievement[passed] || 0).toFixed(4);
       const caption = done ? "TRACK COMPLETE" : time < 0 ? "TRACK START" : "NOW PLAYING";
       const key = caption + rate;
-      if (lastTop === key) return;
+      if (lastTop === key) return false;
       lastTop = key;
       c.drawImage(landscape, 0, -110, 900, 900);
       if (!done) {
@@ -83,17 +83,18 @@
       }
       text("CHART VIEWER", 27, 11, 10, "#475569");
       text(caption, 873, 11, 10, "#725473", null, "right");
+      return true;
     }
     return {
       draw(time, elapsed) {
-        top(time);
+        const monitorChanged = top(time);
         if (time >= end) {
           for (let i=0; i<8; i++) {
             cabinet.light(i, 0, "#ffffff", "button");
             cabinet.light(i, i === 3 || i === 4 ? 1 : 0, i === 3 ? "#ffad48" : "#63b6ff", "wall");
           }
         } else MaiMachine.sampleLights(chart, time, cabinet.light);
-        return cabinet.render(elapsed);
+        return cabinet.render(elapsed, monitorChanged ? c.getImageData(0, 0, monitor.width, monitor.height) : null);
       },
       close() { cabinet.dispose(); }
     };

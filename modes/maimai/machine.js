@@ -633,18 +633,15 @@
       buttons.push(b);
     }
     enabled = localStorage.getItem("vsrg-mai-machine") === "on";
-    const settings = [$("maiMachineStartSetting"), $("maiMachineSetting")];
-    for (const el of settings) {
-      el.checked = enabled;
-      el.onchange = () => {
-        enabled = el.checked;
-        settings.forEach((s) => (s.checked = enabled));
-        localStorage.setItem("vsrg-mai-machine", enabled ? "on" : "off");
-        if (enabled && api.chart()?.modeId === "maimai") api.stop();
-        change(api.chart(), api.library());
-        api.resize();
-      };
-    }
+    const setting = $("maiMachineSetting");
+    setting.checked = enabled;
+    setting.onchange = () => {
+      enabled = setting.checked;
+      localStorage.setItem("vsrg-mai-machine", enabled ? "on" : "off");
+      if (enabled && api.chart()?.modeId === "maimai") api.stop();
+      change(api.chart(), api.library());
+      api.resize();
+    };
     document.addEventListener(
       "keydown",
       (e) => {

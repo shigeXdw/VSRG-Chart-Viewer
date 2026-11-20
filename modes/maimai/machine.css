@@ -1,15 +1,3 @@
-.machine-start-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 16px;
-  color: #b9c7d3;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-.machine-start-option small {
-  color: #8d9aa8;
-}
 #maiMachine[hidden],
 :is(#machineMenu, [data-source-id="machineMenu"])[hidden],
 :is(#machineSummary, [data-source-id="machineSummary"])[hidden],

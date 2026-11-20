@@ -39,7 +39,7 @@
     options.host.append(status);
     loading = (async () => {
       await Promise.all([
-        window.MaiThree || script("vendor/three.min.js?v=3"),
+        window.MaiThree || script("vendor/three.min.js?v=4"),
         window.MaiCabinetMesh || script("assets/maimai-cabinet/mesh.js?v=12")
       ]);
       if (enabled) {
@@ -755,7 +755,7 @@
     async createExport(canvas, monitorCanvas, preset) {
       if (!presets[preset]) throw new Error("Unknown machine camera preset.");
       await Promise.all([
-        window.MaiThree || script("vendor/three.min.js?v=3"),
+        window.MaiThree || script("vendor/three.min.js?v=4"),
         window.MaiCabinetMesh || script("assets/maimai-cabinet/mesh.js?v=12")
       ]);
       const host = document.createElement("div"), menu = document.createElement("div");
