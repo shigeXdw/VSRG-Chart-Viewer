@@ -46,4 +46,4 @@ Export a single station in portrait or both stations in landscape at **1080p60 w
 
 ## Development and licenses
 
-No build step is required. Run the tests with `node --test tests/*.test.cjs`. Viewer code is [MIT licensed](LICENSE). Bundled libraries, noteskins and the CC BY-NC-SA 4.0 cabinet model have [separate licenses and credits](THIRD_PARTY_NOTICES.md).
+Viewer code is [MIT licensed](LICENSE). Bundled libraries, noteskins and the CC BY-NC-SA 4.0 cabinet model have [separate licenses and credits](THIRD_PARTY_NOTICES.md).
