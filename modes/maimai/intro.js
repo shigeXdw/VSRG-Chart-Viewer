@@ -1,9 +1,10 @@
 (function () {
   "use strict";
+  const irisCloseDuration = 0.42, irisOpenDuration = 0.56;
   const enter = 0.85;
   const close = enter + 3;
-  const reveal = close + 0.42;
-  const uncovered = reveal + 0.56;
+  const reveal = close + irisCloseDuration;
+  const uncovered = reveal + irisOpenDuration;
   const duration = uncovered + 0.55;
   const tau = 2 * Math.PI;
   const colors = ["#82aee6", "#74c87d", "#f3bf63", "#fa7d86", "#ba85ed", "#d6a7f3", "#e680be"];
@@ -67,16 +68,20 @@
     }
     c.restore();
   }
+  // The surrounding screen is already clipped to the 300-unit circle.
+  function drawIris(c, opening) {
+    if (opening >= 1) return;
+    const aperture = 301 * ease(opening);
+    c.beginPath(); c.rect(-301, -301, 602, 602);
+    c.moveTo(aperture, 0);
+    c.arc(0, 0, aperture, 0, tau); c.fillStyle = "#cdb6de"; c.fill("evenodd");
+  }
   function draw(c, chart, time, radius, image) {
     const age = time + duration;
     if (age >= uncovered) return;
     c.save(); c.scale(radius / 300, radius / 300);
     c.beginPath(); c.arc(0, 0, 300, 0, tau); c.clip();
-    const mask = "#cdb6de";
     if (age < reveal) {
-      circle(c, 0, 0, 301, mask);
-      const aperture = 301 * (1 - ease((age - close) / (reveal - close)));
-      c.beginPath(); c.arc(0, 0, aperture, 0, tau); c.clip();
       const pastel = c.createLinearGradient(-220, 220, 220, -230);
       pastel.addColorStop(0, "#f5d9fc"); pastel.addColorStop(0.5, "#e2d8fb"); pastel.addColorStop(1, "#bedffb");
       c.fillStyle = pastel; c.fillRect(-300, -300, 600, 600);
@@ -86,13 +91,11 @@
       circle(c, 72, 100, 79, "#ffffff52");
       const progress = ease((age - 0.12) / (enter - 0.12));
       if (progress > 0) card(c, chart, image, progress);
+      drawIris(c, (reveal - age) / irisCloseDuration);
     } else {
-      const aperture = 301 * ease((age - reveal) / (uncovered - reveal));
-      c.beginPath(); c.rect(-301, -301, 602, 602);
-      c.moveTo(aperture, 0);
-      c.arc(0, 0, aperture, 0, tau); c.fillStyle = mask; c.fill("evenodd");
+      drawIris(c, (age - reveal) / irisOpenDuration);
     }
     c.restore();
   }
-  window.MaiIntro = { duration, revealTime: reveal - duration, draw };
+  window.MaiIntro = { duration, revealTime: reveal - duration, draw, drawIris, irisCloseDuration, irisOpenDuration };
 })();

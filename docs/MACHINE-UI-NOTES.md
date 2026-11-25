@@ -27,4 +27,4 @@ The six user-supplied images are visual references, not bundled assets.
 - Upper play display prioritizes achievement; the result display shows the actual autoplay judgment totals. No arcade logos, player avatars or artwork are included in the new menu scenery.
 - Focused Firefox check covered selection, settings synchronization/persistence, playback, results and return to selection. Visual proofs stayed in the temporary workspace.
 
-The machine menu now uses the shared PNG set in `assets/maimai-ui/` for its visual surfaces. `machine.css` retains layout and animation; `machine-sprites.css` binds the artwork. Dynamic chart and playback text stays live. The generator in `tools/build-machine-sprites.cjs` reproduces the sprites without adding a browser runtime dependency.
+The machine menu now uses the shared PNG set in `assets/maimai-ui/` for its visual surfaces. `machine.css` retains layout and animation; `machine-sprites.css` binds the artwork. Dynamic chart and playback text stays live.

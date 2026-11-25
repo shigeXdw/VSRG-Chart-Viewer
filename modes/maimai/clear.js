@@ -3,8 +3,9 @@
   const tau = Math.PI * 2;
   const clamp = x => Math.max(0, Math.min(1, x));
   const ease = x => (x = clamp(x), x * x * (3 - 2 * x));
-  const closeAt = 1.22, closedAt = closeAt + 0.42;
-  const openAt = closedAt + 1, revealedAt = openAt + 0.54;
+  const { drawIris, irisCloseDuration, irisOpenDuration } = window.MaiIntro;
+  const resultAt = 1.22 + irisCloseDuration;
+  const revealedAt = resultAt + irisOpenDuration;
 
   // Song/chart time only: pause, seek and replay never need animation timers.
   function start(chart) {
@@ -18,9 +19,10 @@
     if (age < 0) return null;
     return {
       opacity: ease(age / 0.24),
-      result: age >= openAt,
-      shutter: age < closedAt ? ease((age - closeAt) / (closedAt - closeAt)) :
-        1 - ease((age - openAt) / (revealedAt - openAt))
+      result: age >= resultAt,
+      aperture: clamp(age < resultAt
+        ? (resultAt - age) / irisCloseDuration
+        : (age - resultAt) / irisOpenDuration)
     };
   }
   function disc(c, r, fill) {
@@ -68,7 +70,7 @@
   function wheel(c, age) {
     disc(c, 301, "#201338");
     const colors = ["#cd3aa5", "#46367c", "#148db9", "#7c499b", "#db8f54", "#50417b"];
-    c.save(); c.rotate(-0.27 + 0.16 * Math.min(age, closedAt));
+    c.save(); c.rotate(-0.27 + 0.16 * Math.min(age, resultAt));
     for (let i = 0; i < 24; i++) {
       c.rotate(tau / 24);
       c.beginPath(); c.moveTo(0, 0); c.lineTo(317, -14); c.lineTo(317, 30); c.closePath();
@@ -88,31 +90,6 @@
     wheel(c, age);
     clearMark(c, age);
     label(c, "A U T O P L A Y", 0, 100, 10, "#412243", 850);
-  }
-  function shutter(c, amount) {
-    if (!amount) return;
-    const angle = 0.45;
-    c.save(); c.rotate(angle);
-    const gap = (1 - amount) * 310;
-    for (const side of [-1, 1]) {
-      c.save(); c.scale(side, 1); c.translate(gap, 0);
-      const panel = c.createLinearGradient(0, -150, 190, 230);
-      panel.addColorStop(0, "#382065"); panel.addColorStop(0.48, "#261247"); panel.addColorStop(1, "#503080");
-      c.fillStyle = panel; c.fillRect(-0.5, -320, 331, 640);
-      c.save();
-      c.beginPath(); c.rect(12, -320, 319, 640); c.clip();
-      // Keep the bands level with the playfield as each mirrored panel moves.
-      c.rotate(-side * angle);
-      for (let i = -5; i <= 5; i++) {
-        c.fillStyle = i % 2 ? "#ffffff07" : "#1007222c";
-        c.fillRect(-480, i * 93, 960, 23);
-      }
-      c.restore();
-      c.fillStyle = side > 0 ? "#f939a5" : "#9351de"; c.fillRect(0, -320, side > 0 ? 10 : 5, 640);
-      c.fillStyle = "#dfb2fc"; c.fillRect(16, -320, 1, 640);
-      c.restore();
-    }
-    c.restore();
   }
   function fitted(c, text, x, y, size, available, color, weight) {
     text = String(text || "");
@@ -270,11 +247,11 @@
     if (!p || !p.opacity) return;
     c.save(); c.scale(radius / 300, radius / 300);
     c.beginPath(); c.arc(0, 0, 300, 0, tau); c.clip(); c.globalAlpha *= p.opacity;
-    if (p.shutter < 1) {
-      if (p.result) result(c, chart, rank, rate, image, age - openAt, cabinet);
+    if (p.aperture > 0) {
+      if (p.result) result(c, chart, rank, rate, image, age - resultAt, cabinet);
       else burst(c, age);
     }
-    shutter(c, p.shutter);
+    drawIris(c, p.aperture);
     c.restore();
   }
   window.MaiClear = { start, end, phase, draw };

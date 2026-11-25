@@ -67,6 +67,8 @@
       else if (!["BPM", "BEAT", "TIL", "SPDMOD", "USETIL"].includes(key)) headers[key] = args.join("\t");
     }
     const version = Number(headers.VER) || 8;
+    // The Mate exporter writes source SLC/SXC junctions as UGC c nodes.
+    const mateSlideRelays = /^' Created with MuConvert\b/i.test(lines[0]) && /^MATE\d+(?:-WE)?$/.test(headers.SONGID || "");
     if (Number(headers.EXVER) >= 1) flags.EXLONG = true;
     const resolution = Number.isSafeInteger(Number(headers.TICKS)) && Number(headers.TICKS) > 0 ? Number(headers.TICKS) : RESOLUTION;
     if (headers.SPDDEF !== undefined || headers.SPDFLD !== undefined) warn("Extended SPDDEF/SPDFLD note-speed fields are not yet supported.");
@@ -113,6 +115,7 @@
         rawNotes.push(raw);
         if (["T", "h", "s", "H", "S", "C"].includes(note.type)) currentLong = raw;
       } else if (currentLong && note && /^\d+$/.test(position) && Number.isSafeInteger(Number(position))) {
+        if (mateSlideRelays && note.type === "c" && currentLong.note.type === "s") note.type = "relay";
         currentLong.children.push({ offset: Number(position), note, timeline: currentTimeline });
       }
     }
@@ -250,7 +253,8 @@
         - scrollPosition(currentTime - leadInSeconds, note.timeline, speed, time);
     }
 
-    const notes = [], paths = [], hitNotes = [];
+    let notes = [], hitNotes = [];
+    const paths = [];
     const maximumGeneratedCrushTicks = 250000;
     let generatedCrushTicks = 0;
     let lastEventTick = measureTicks[maximumBar];
@@ -314,6 +318,27 @@
       }
       lastEventTick = Math.max(lastEventTick, points.at(-1).tick);
     }
+    if (flags.EXLONG) {
+      const keyFor = note => `${note.tick}:${note.x}:${note.width}`;
+      const exTaps = new Map(), folded = new Set();
+      for (const note of notes) {
+        if (note.type !== "x") continue;
+        const key = keyFor(note);
+        if (!exTaps.has(key)) exTaps.set(key, note);
+      }
+      for (const { type, points: [head] } of paths) {
+        if (type !== "h" && type !== "s" && type !== "T") continue;
+        const ex = exTaps.get(keyFor(head));
+        if (!ex) continue;
+        head.exStart = true;
+        head.direction = ex.direction;
+        folded.add(ex);
+      }
+      if (folded.size) {
+        notes = notes.filter(note => !folded.has(note));
+        hitNotes = hitNotes.filter(note => !folded.has(note));
+      }
+    }
     // Extend the inspector's bar grid when a long note reaches beyond its head's bar.
     while (measureTicks.at(-1) <= lastEventTick && measureTicks.length <= 100000) extendMeasures(measureTicks.length);
     notes.sort((a, b) => a.time - b.time); hitNotes.sort((a, b) => a.time - b.time);
@@ -337,7 +362,8 @@
       name, format, jacket: headers.JACKET || "", header: {
         TITLE: headers.TITLE || name, ARTIST: headers.ARTIST || "", SUBARTIST: headers.DESIGN ? `charted by ${headers.DESIGN}` : "",
         GENRE: headers.GENRE || "UGC", PLAYLEVEL: headers.LEVEL || headers.CONST || "--", BPM: String(firstBpm),
-        DIFFICULTY: String(difficultyIndex), UGC_DIFFICULTY: style[0], UGC_COLOR: style[1]
+        DIFFICULTY: String(difficultyIndex), UGC_DIFFICULTY: style[0], UGC_COLOR: style[1],
+        UGC_WEATTR: difficultyIndex === 4 ? headers.WEATTR || "—" : ""
       },
       base, resolution, mainTimeline, leadInSeconds, flags, warnings,
       fieldColor: Number.isFinite(Number(headers.FLDCOL)) ? Number(headers.FLDCOL) : -1,
@@ -358,19 +384,20 @@
     context.fillStyle = fill; context.fill();
   }
 
-  const groundInk = { t: "#ff526e", x: "#ffe45b", d: "#ff487b", h: "#ffc253", f: "#5cdbff", s: "#74ebff", T: "#74ebff" };
+  const groundInk = { t: "#f6413b", x: "#ffe45b", d: "#539aff", h: "#ffc253", f: "#5cdbff", s: "#518dff", T: "#518dff" };
   const noteNames = { t: "Tap", x: "EX tap", d: "Damage", h: "Hold", f: "Flick", s: "Slide", T: "Slide", H: "AIR hold", S: "AIR slide", C: "AIR crush", a: "AIR" };
   const directions = { UC: "up", UL: "up-left", UR: "up-right", DC: "down", DL: "down-left", DR: "down-right", L: "left", R: "right" };
 
   function noteInk(type, note) {
-    if (type === "C") return window.UgcRenderer.crushColors[note.color] || "#c5f6ff";
+    if (type === "C") return window.UgcRenderer.crushColors[note.color] || window.UgcRenderer.crushColors["0"];
+    if (note.parentType === "H" || note.parentType === "S") return "#ed54ee";
     if (groundInk[type]) return groundInk[type];
     const down = (note.direction || "UC").startsWith("D");
     return down !== (note.color === "I") ? "#ff91d1" : "#8dff98";
   }
 
   function drawInspectorNote(ctx, note, x, w, y, height) {
-    const type = note.parentType || note.type, ink = noteInk(type, note), cx = x + w / 2;
+    const type = note.exStart ? "x" : note.parentType || note.type, ink = noteInk(type, note), cx = x + w / 2;
     const bar = (top, h) => {
       ctx.fillStyle = "#141421"; ctx.fillRect(x, top - 1, w, h + 2);
       ctx.fillStyle = ink; ctx.fillRect(x + 1, top, Math.max(1,w - 2), h);
@@ -409,7 +436,7 @@
         mark([[cx-r,y],[cx,y-6],[cx+r,y],[cx,y+6],[cx-r,y]],ink);
       } else {
         ctx.fillStyle = ink; ctx.fillRect(cx-5,y-5,10,10);
-        ctx.fillStyle = "#21352c"; ctx.fillRect(cx-2,y-2,4,4);
+        ctx.fillStyle = "#4a195a"; ctx.fillRect(cx-2,y-2,4,4);
       }
       return;
     }
@@ -452,6 +479,7 @@
     const describe = (n, body = false) => {
       const type = n.parentType || n.type;
       let label = noteNames[type] || type;
+      if (n.exStart && !body) label = "EX " + label.toLowerCase();
       if (n.parentType) label += type === "C" ? " tick" : " action";
       let dir = n.direction;
       if (mirror && dir) dir = dir.replace(/[LR]/g, c => c === "L" ? "R" : "L");
@@ -574,7 +602,8 @@
     scrollDuration: (speed) => window.UgcRenderer.scrollDuration(speed),
     drawMeasure, inspectorLegend, identifyNote,
     selectLabel(chart) {
-      return `LV ${chart.header.PLAYLEVEL} | 16-Lane | ${chart.header.TITLE} [${chart.header.UGC_DIFFICULTY}]`;
+      const badge = chart.header.UGC_WEATTR || "LV " + chart.header.PLAYLEVEL;
+      return `${badge} | 16-Lane | ${chart.header.TITLE} [${chart.header.UGC_DIFFICULTY}]`;
     },
     difficultyStyle(chart) {
       return [chart.header.UGC_DIFFICULTY, chart.header.UGC_COLOR];

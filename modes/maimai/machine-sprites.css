@@ -63,7 +63,8 @@
 .machine-setting-ring-actions span:nth-child(n+3) { font-size: 0; background: url("../../assets/maimai-ui/category-left.png") center / contain no-repeat; }
 .machine-setting-ring-actions span:nth-child(4) { background-image: url("../../assets/maimai-ui/category-right.png"); }
 .machine-setting-tabs span, .machine-setting-tabs .selected { border: 0; border-radius: 0; box-shadow: none; background: var(--ui-tab) center / 100% 100%; }
-.machine-setting-tabs span:not(.selected) { opacity: .8; }
+.machine-setting-tabs span:not(.selected) { opacity: .76; }
+.machine-setting-tabs .selected { filter: drop-shadow(0 .25cqw .35cqw #25114470); }
 .machine-setting-card { padding: 0; border: 0; border-radius: 0; box-shadow: none; background: url("../../assets/maimai-ui/setting.png") center / 100% 100%; }
 .machine-setting-card h3 { position: absolute; left: 3%; right: 3%; top: 4%; margin: 0; }
 .machine-setting-preview { position: absolute; left: 3.6%; top: 14.4%; width: 92.8%; height: 34.9%; border-radius: 0; background: url("../../assets/maimai-ui/blank-preview.png") center / 100% 100%; }
@@ -125,3 +126,7 @@
 :is(#machineValue, [data-source-id="machineValue"]) span { text-align: center; min-width: 0; }
 .rate-fraction { font-size: .9em; }
 .rate-percent { font-size: .75em; }
+
+.machine-setting-preview.machine-setting-light-preview {
+  box-shadow: inset 0 .55cqw var(--setting-light);
+}

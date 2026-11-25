@@ -27,11 +27,11 @@ These controls replace the generic lane width, note thickness and IIDX scroll co
 - `SOFFSET` and `CLICK` defaults and command ordering control the first-measure count-in. The viewer shifts chart and music times together to its nonnegative transport clock. Negative music offsets skip into the audio source.
 - Explicit `TIL` streams integrate speed over seconds, including stops and reverse motion. Missing streams remain independent. `SPDMOD` follows the observed final-segment rule and is inactive on undeclared timelines.
 - Scroll duration is `7 / speed` through speed 10, then `7 / ((speed - 10)^2 + 10)`. The field uses the observed 45-degree camera basis, 64-unit lanes and AIR height mapping, adapted to the canvas dimensions.
-- Ground SLIDE controls form Bezier curves in lane and time. Ordinary nodes split curves; AIR geometry interpolates linearly through authored points. Active ribbons clip at judgment time using elapsed seconds between prepared points.
+- Ground SLIDE controls form Bezier curves in lane and time. Ordinary nodes split curves. AIR geometry interpolates linearly through authored points. Active ribbons clip at judgment time using elapsed seconds between prepared points.
 - Note artwork is mapped onto projected floor quads with perspective-correct texture coordinates. AIR uses a vertical mesh with directional shear, a shared rimmed chevron and a fading striped trail. The up direction mirrors the artwork vertically, and the chart selects its green or purple palette. AIR geometry moves back by 0.3125 world units per unit of elevation. Straight arrows span heights 0–233, and diagonals span 16–249. The elevated judge guide appears during active AIR holds and slides at the current height of each active AIR path. Its painted glow is original viewer artwork. The field texture, judgment strip, hit rings and particle positions also use world-space projection.
 - Note sprites are drawn from original viewer artwork and cached by note type, width, direction, palette and animation frame. When WebGL is available, the viewer maps the sprites and smooth ribbon textures onto GPU quads with camera-depth interpolation. The viewer times transfers from WebGL to the main canvas. Sustained slow transfers, a lost context or unavailable WebGL select Canvas projection. That path draws notes in perspective bands and uses cached tapered gradients for ribbons. A solid dark plum fills the area around the lane by default. The road has a separate device-resolution cache. Constant timelines avoid repeated timing searches.
 - AIR-CRUSH positive intervals create plates and judgments in authored tick space, including an aligned endpoint. `$` produces the head alone; zero produces a decorative path without judgments. Visible AIR-CRUSH paths use narrow center traces and retain a short elapsed-time tail after crossing the judgment line. AIR-action nodes use raised rectangular plates.
-- Each hit palette has a cached sprite sheet for rings, flashes, sparks and EX streaks. Arrow flashes and particles start on the lane beneath the arrow. AIR action and crush hits use their authored height. Raised plates, holds, slides and crush traces cast footprints across the lane and any ground notes beneath them. Flick chevrons, AIR-action streaks, rotating fragments, beams and sustain glows use world geometry. Hit and sustain animations use chart time. Pausing freezes the frame; seeking backward reproduces it. AIR-CRUSH expires after 0.25 seconds, ordinary hits after 0.5 seconds, and flick/AIR-action traces within one second.
+- Each hit palette has a cached sprite sheet for rings, flashes, sparks and EX streaks. Arrow flashes and particles start on the lane beneath the arrow. AIR-Action hits use a white trail that retreats along the lane and a fixed-size radial burst at the authored AIR height. AIR-CRUSH hits also use their authored height. Raised plates, holds, slides and crush traces cast footprints across the lane and any ground notes beneath them. Hit and sustain animations use chart time. Pausing freezes the frame. Seeking backward reproduces it. AIR-CRUSH effects expire after 0.25 seconds, AIR-Action bursts after 0.32 seconds, ordinary hits after 0.5 seconds, and Flick and AIR path start traces within one second.
 - Audio scheduling discards stale asynchronous work after seeking, accounts for elapsed sample time, avoids duplicate resumed BGM, and rebuilds sources immediately when playback speed changes. Pause positions use the audio clock.
 
 The playback header shows the jacket with track information. The side panel displays an image when the chart specifies a separate background. Narrow canvases move the progress card below the other two.
@@ -57,29 +57,3 @@ Pathological curves have bounded sampling work. A chart-wide limit of 250,000 ge
 Behavior was checked against the local reference player (v2.01) on 2026-10-29 using REA 6.5 / Ghidra 12.1.4 for launcher analysis and focused static analysis, plus passive inspection of scripts already loaded by the application. REA's runtime tool did not accept the application's virtual Windows URL; full-script analysis exceeded its heap limit, so only focused analysis is considered successful. A local gameplay recording supplied visual reference. These observations do not establish exhaustive parity across all chart features.
 
 Public format references: [UGC specification](https://gist.github.com/inonote/5c01e73781cab17765a1d93641d52298) and [official overtaking-note documentation](https://umgr.inonote.jp/margrete/advanced/oikoshi/).
-
-## Validation
-
-Run the dependency-free timing, parser, curve, renderer and audio regression tests with a recent Node.js:
-
-```sh
-node --test tests/*.test.cjs
-```
-
-For browser validation, serve the repository over HTTP, install or provide `playwright-core`, and run:
-
-```sh
-node tests/browser-smoke.cjs http://127.0.0.1:4175/
-```
-
-Optional environment variables are `PLAYWRIGHT_MODULE` (module path), `BROWSER_EXE` (Chromium executable) and `SCREENSHOT_DIR`. The browser check imports a synthetic chart and generated tone, changes settings, plays, seeks, changes rate, pauses, switches to BMS and verifies persisted settings and the absence of JavaScript page errors.
-
-`tests/fixtures/ugc-visual-showcase.ugc` is an original, media-free chart for visually checking glossy note heads, curved slides, AIR directions, holds and AIR-CRUSH intervals. It can be opened through the ordinary viewer's Open menu.
-
-For a local chart performance comparison:
-
-```sh
-node tests/ugc-performance.cjs "path/to/chart-folder" http://127.0.0.1:4175/
-```
-
-This selects the Master chart when present, loads adjacent audio/images, plays at note speed 5.5, seeks to 55%, warms up for 60 frames, then measures six seconds. It reports animation-frame intervals separately from CPU rendering submission time, since submission time does not include all GPU work. `FORCE_CANVAS=1` compares the fallback; `SEEK_PERCENT` selects another passage and `BENCHMARK_OUTPUT` saves the JSON report. To test YOUNITHM Ultima, pass the specific Ultima UGC file and use seeks of 8% for the opening slide crossings and 54% for the reverse-scroll passage. Browser/module environment variables are the same as the smoke test. Results depend on the machine, display refresh rate, browser and passage; they are not a guaranteed frame rate.

@@ -154,6 +154,7 @@
   }
 
   const spawnRadius = 0.255;
+  const radialLeadFactor = 1.5;
   const radialDistance = (progress) => spawnRadius + (1 - spawnRadius) * progress;
 
   function cabinet(ctx, R, hasMedia, visibility) {
@@ -290,6 +291,12 @@
       if (hit.break) pendingBreaks += pending;
     }
     return { deluxe: Math.max(0, deluxe), pendingBreaks };
+  }
+  function formatAchievement(rate) {
+    return (Math.floor(rate * 10000 + 1e-8) / 10000).toFixed(4) + "%";
+  }
+  function achievementText(chart, passed, time) {
+    return formatAchievement(displayedRates(chart, passed, time).deluxe);
   }
 
   // All HUD labels share a typeface. Measure its small alphabet once at a fixed size.
@@ -486,9 +493,8 @@
     ctx.restore();
     ctx.globalAlpha = 1;
     band(rankHalfAngle, rankHalfAngle + 0.003, base + 0.022, outer - 0.022, "#75808a");
-    const percent = Math.floor(gauge * 10000 + 1e-8) / 10000;
     // Reserve three integer slots so even a carry to 100% leaves every other slot in place.
-    label(rankHalfAngle + 0.20, percent.toFixed(4) + "%", 0.056, "#f3f5f8", 0.423, 0, "000.0000%");
+    label(rankHalfAngle + 0.20, formatAchievement(gauge), 0.056, "#f3f5f8", 0.423, 0, "000.0000%");
     ctx.restore();
   }
   let rimCache;
@@ -665,7 +671,7 @@
     ctx.restore();
   }
   function radialGuide(ctx, n, time, lead, color) {
-    const progress = 1 + (time - n.time) / (lead / 1.35);
+    const progress = 1 + (time - n.time) / (lead / radialLeadFactor);
     if (progress <= 0 || progress >= 1) return;
     const radius = radialDistance(progress);
     const p = button(n.key, radius);
@@ -694,10 +700,11 @@
 
   function radial(ctx, n, time, lead, color, effects) {
     // Radial notes first grow on the inner ring, then travel at a constant speed.
-    const travel = lead / 1.35;
-    const progress = clamp(1 + (time - n.time) / travel);
-    const scale = 0.35 * clamp((time - n.time + lead) / (lead - travel)) + 0.65 * clamp(progress * 4);
+    const travel = lead / radialLeadFactor;
+    const timeUntilHit = n.time - time;
+    const scale = clamp((lead - timeUntilHit) / (lead - travel));
     if (scale <= 0) return;
+    const progress = clamp(1 - timeUntilHit / travel);
     const head = button(n.key, radialDistance(progress));
     if (n.kind === "hold") {
       if (effects && time >= n.time) buttonLight(ctx, n.key, color, 0.76);
@@ -1052,8 +1059,8 @@
         else hi = m;
       }
       const touchLead = baseLead * 1.55,
-        radialLead = baseLead * 1.35;
-      const end = window.MaiSimai.upper(notes, time + touchLead / 0.25, "time");
+        radialLead = baseLead * radialLeadFactor;
+      const end = window.MaiSimai.upper(notes, time + Math.max(touchLead, radialLead) / 0.25, "time");
       for (let i = lo; i < end; i++) {
         if (!notes[i].mine && notes[i].firework) firework(ctx, notes[i], time);
       }
@@ -1097,5 +1104,5 @@
     }
     ctx.restore();
   }
-  window.MaiRenderer = { draw, colorOf };
+  window.MaiRenderer = { draw, colorOf, achievementText };
 })();

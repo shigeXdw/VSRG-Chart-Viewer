@@ -535,10 +535,11 @@
   left: 0;
   right: 0;
   height: 3%;
-  padding: 0.1%;
+  display: grid;
+  place-items: center;
   background: #303c8c;
   color: white;
-  font: 650 1.45cqw/1.7 system-ui;
+  font: 650 1.45cqw/1.2 system-ui;
   white-space: nowrap;
   box-shadow: 0 1.5cqw 0 var(--tone);
 }
@@ -842,7 +843,7 @@
   object-position: 50% 30%;
 }
 
-#maiMachine.machine-model-active {
+#maiMachine.machine-model-active:not([hidden]) {
   display: block;
   touch-action: none;
 }
@@ -853,6 +854,177 @@
   width: 800px;
   height: 1225px;
   visibility: hidden;
+}
+.machine-model-stage, .machine-model-frame {
+  position: absolute;
+  inset: 0;
+}
+.machine-model-stage { container-type: size; }
+.machine-camera-preview .machine-model-frame {
+  margin: auto;
+  width: min(100%, var(--camera-frame-width));
+  height: min(100%, var(--camera-frame-height));
+  background: #000;
+  outline: 1px solid #465767;
+  overflow: hidden;
+}
+.machine-camera-preview .machine-model-tools { display: none; }
+#maiMachine:not(.machine-camera-preview) .machine-camera-tools, .machine-camera-tools[hidden], #maiCameraPreview[hidden] { display: none; }
+.machine-camera-tools {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  color: #f5f8ff;
+  font: 12px/1 system-ui;
+  pointer-events: none;
+}
+.machine-viewfinder {
+  position: absolute;
+  inset: 8px;
+  filter: drop-shadow(0 1px 2px #000b);
+}
+.machine-viewfinder i {
+  position: absolute;
+  width: clamp(12px, 6%, 32px);
+  height: clamp(12px, 6%, 32px);
+  border: solid #f5f8ffbd;
+  border-width: 0;
+}
+.machine-viewfinder i:nth-child(1) { top: 0; left: 0; border-width: 1px 0 0 1px; }
+.machine-viewfinder i:nth-child(2) { top: 0; right: 0; border-width: 1px 1px 0 0; }
+.machine-viewfinder i:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 1px 1px; }
+.machine-viewfinder i:nth-child(4) { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
+.machine-camera-guides {
+  position: absolute;
+  inset: -8px;
+  opacity: 0;
+  transition: opacity .3s ease;
+}
+.machine-camera-tools.is-framing .machine-camera-guides { opacity: 1; }
+.machine-camera-guides span {
+  position: absolute;
+  inset: 0;
+  width: 15px;
+  height: 15px;
+  margin: auto;
+  background: linear-gradient(#fff9,#fff9) center / 1px 100% no-repeat,
+              linear-gradient(#fff9,#fff9) center / 100% 1px no-repeat;
+}
+.machine-camera-tools.has-thirds-grid .machine-camera-guides::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#fff5,#fff5) 33.333% 0 / 1px 100% no-repeat,
+              linear-gradient(#fff5,#fff5) 66.667% 0 / 1px 100% no-repeat,
+              linear-gradient(#fff5,#fff5) 0 33.333% / 100% 1px no-repeat,
+              linear-gradient(#fff5,#fff5) 0 66.667% / 100% 1px no-repeat;
+}
+.machine-camera-top {
+  position: absolute;
+  z-index: 1;
+  inset: 12px 12px auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.machine-camera-top output {
+  margin-right: auto;
+  padding: 7px;
+  border-radius: 6px;
+  background: #121721cf;
+  font-variant-numeric: tabular-nums;
+}
+.machine-camera-tools button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid #f5f8ff69;
+  border-radius: 50%;
+  background: #121721df;
+  color: inherit;
+  font-size: 18px;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.machine-camera-tools button:hover, .machine-camera-tools button:focus-visible { border-color: #fff; }
+.machine-camera-settings { position: relative; }
+.machine-camera-settings-panel[hidden] { display: none; }
+.machine-camera-settings-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: -42px;
+  display: grid;
+  gap: 3px;
+  width: 156px;
+  padding: 5px;
+  border: 1px solid #f5f8ff4d;
+  border-radius: 10px;
+  background: #121721f2;
+  box-shadow: 0 5px 14px #0005;
+  pointer-events: auto;
+}
+.machine-camera-settings-panel button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding-inline: 7px;
+  border-color: transparent;
+  border-radius: 6px;
+  background: none;
+  font-size: 12px;
+}
+.machine-camera-settings-panel button span:last-child { color: #b5c6da; }
+.machine-camera-bottom {
+  position: absolute;
+  inset: auto 0 0;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 16px 8px 11px;
+  background: linear-gradient(transparent, #0c101baf);
+}
+.machine-camera-adjustments { display: flex; align-items: center; gap: 7px; }
+.machine-camera-zoom {
+  display: flex;
+  align-items: center;
+  border: 1px solid #f5f8ff69;
+  border-radius: 20px;
+  background: #121721df;
+}
+.machine-camera-zoom button { width: 32px; height: 32px; border-color: transparent; background: none; }
+.machine-camera-zoom output { min-width: 3.5ch; text-align: center; font-variant-numeric: tabular-nums; }
+.machine-camera-tools #maiCameraReset { width: 34px; height: 34px; }
+.machine-camera-tools #maiCameraRender {
+  width: auto;
+  height: auto;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: 0 1px 3px #000;
+}
+.machine-camera-tools #maiCameraRender span {
+  width: 38px;
+  height: 38px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ff525f 56%, #121721 58%);
+}
+.machine-camera-tools #maiCameraRender:is(:hover, :focus-visible) span { background: radial-gradient(circle, #ff7b85 56%, #121721 58%); }
+.machine-camera-tools #maiCameraRender:disabled { opacity: .5; }
+#maiCameraRenderHint { font-size: 10px; color: #e1e9f5; text-shadow: 0 1px 3px #000; }
+#maiMachine:is([data-phase="playing"], [data-phase="result"]) #maiCameraRenderHint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 .machine-model-canvas,
 .machine-model-screens {
@@ -939,27 +1111,29 @@
 .machine-settings-panel { position: absolute; inset: 0; }
 .machine-setting-tabs {
   position: absolute;
-  top: 17%;
+  top: calc(var(--settings-ribbon-top) - 7.9cqw);
   left: 17%;
   width: 66%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  height: 7.2cqw;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 1cqw;
-  height: 8%;
 }
 .machine-setting-tabs span {
-  flex: 1;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0 .75cqw;
   background: color-mix(in srgb, var(--tone), #fff 25%);
   border: .35cqw solid #fff7ca;
   border-radius: 2cqw 2cqw 0 0;
-  font: 800 2.1cqw/1.2 system-ui;
   color: white;
-  padding: 2cqw 1cqw;
-  box-shadow: 0 .3cqw .6cqw #375b6b50;
-  transition: padding .4s, background-color .4s;
+  font: 800 2.1cqw/1.15 system-ui;
+  text-wrap: balance;
+  transition: opacity .25s;
 }
-.machine-setting-tabs .selected { padding-top: 3.6cqw; background: var(--tone); }
+.machine-setting-tabs .selected { background-color: var(--tone); }
 .machine-setting-carousel { position: absolute; inset: 0; }
 .machine-setting-card {
   position: absolute;
@@ -992,7 +1166,8 @@
 .machine-setting-card.unavailable .machine-setting-adjust { opacity: .3; }
 .machine-setting-help { position: absolute; top: 77%; left: 21%; width: 58%; padding: .5cqw; box-sizing: border-box; border-radius: 2cqw; background: #234b7bc9; font: 700 1.4cqw/1.4 system-ui; color: white; }
 .machine-menu[data-screen="settings"] :is(#machineChoice, [data-source-id="machineChoice"]) { display: none; }
-.machine-menu[data-screen="settings"] .machine-instruction { top: 25.5%; font-size: 1.3cqw; }
+.machine-menu[data-screen="settings"] { --settings-ribbon-top: 25.5%; }
+.machine-menu[data-screen="settings"] .machine-instruction { top: var(--settings-ribbon-top); font-size: 1.3cqw; }
 .machine-menu[data-screen="settings"] .machine-nav { top: 66.84%; z-index: 6; }
 .machine-menu[data-screen="settings"]::before { top: 28%; height: 37%; }
 .machine-menu[data-screen="settings"]::after { top: 65%; }

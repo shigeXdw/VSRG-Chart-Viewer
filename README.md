@@ -8,21 +8,25 @@ Autoplay rhythm game charts in your browser with music, keysounds and background
 
 | BMS / BME / BMSON | osu!mania | maimai / Simai / AstroDX |
 | --- | --- | --- |
-| ![BMS scratch and key lanes](docs/images/bms.gif) | ![Four-key mania chart](docs/images/osu-mania.gif) | ![Orbit Study in the circular maimai player](docs/images/maimai.gif) |
-| Open `.bms`, `.bme`, `.bml` or BMSON 1.0 charts. BMS supports base 36 and 62, STOP timing, LNOBJ holds, RANDOM branches, keysounds and BGA. The player includes Hi-Speed, green number, fixed scrolling, lane mods and SUDDEN+. | Open a mania `.osu` file with its audio, or load an `.osz` or ZIP pack and choose a difficulty. Preview the chart’s key layout, chords and long notes. | Open `maidata.txt`, a Majdata song folder or an AstroDX `.adx` pack. Follow touch notes, holds and slide chains around the circular field. Import charts from Mai Notes, use the optional 3D Virtual Cabinet mode, or export portrait/landscape 1080p60 MP4s with audio. [Guide](docs/MAIMAI.md) |
+| ![BMS scratch and key lanes](docs/images/bms.gif) | ![Four-key mania chart](docs/images/osu-mania.gif) | ![Orbit Study on the standard maimai playfield](docs/images/maimai.gif) |
+| Open `.bms`, `.bme`, `.bml`, or `.bmson` charts with keysounds and background animations. Adjust Hi-Speed, lane mods, and SUDDEN+ in the player. | Open a mania `.osu` chart with its audio, or load an `.osz` or ZIP pack. Preview key layouts, chords, and long notes. | Open `maidata.txt`, a Majdata song folder, or an AstroDX `.adx` pack. Follow taps, touch notes, holds, and slide chains around the circular field. You can also import from Mai Notes. [Guide](docs/MAIMAI.md) |
 
-| StepMania / Etterna | UGC / SUS | SOUND VOLTEX / K-Shoot MANIA |
+| StepMania / Etterna | Umiguri / SUS | SOUND VOLTEX / K-Shoot MANIA |
 | --- | --- | --- |
-| ![StepMania arrows approaching the receptors](docs/images/stepmania.gif) | ![Slides and AIR notes on the 16-lane field](docs/images/ugc.gif) | ![BT notes, FX holds and crossing lasers](docs/images/sdvx.gif) |
-| Open dance-single or dance-double `.sm` and `.ssc` charts. XMod follows BPM changes, stops and scroll reversals. Switch between upscroll and downscroll, or use fixed-speed scrolling to read a dense passage. [Modchart guide](docs/STEPMANIA.md) | Open V4/V8 `.ugc` charts or Ched-style `.sus` charts. The 16-lane field shows curved slides, raised AIR paths and a judge line that follows their height. Select a note in the inspector to see its type, direction and lanes. [Format guide](docs/UGC.md) | Open a USC or K-Shoot MANIA song folder or ZIP with its `.ksh` difficulties and audio. Follow BT notes, FX holds and laser slams on a tilting highway with an optional local USC skin, or inspect individual measures. [Format guide](docs/SOUND-VOLTEX.md) |
+| ![StepMania arrows approaching the receptors](docs/images/stepmania.gif) | ![Umiguri slides and AIR notes](docs/images/ugc.gif) | ![BT notes, FX holds and crossing lasers](docs/images/sdvx.gif) |
+| Open dance-single or dance-double `.sm` and `.ssc` charts. Follow the chart’s BPM changes, stops, and scroll reversals, or choose fixed-speed scrolling. [Modchart guide](docs/STEPMANIA.md) | Open `.ugc` or `.sus` charts to follow slides and AIR notes on the 16-lane field. Point to a note in the inspector to see its type, direction, and lanes. [Format guide](docs/UGC.md) | Open a USC or K-Shoot MANIA song folder or ZIP with its `.ksh` charts and audio. Follow BT notes, FX holds, and laser slams with the built-in view or a local USC skin. [Format guide](docs/SOUND-VOLTEX.md) |
 
-Try these demos with **Open files**. [Simai · Orbit Study](tests/fixtures/maimai/maidata.txt), [UGC · Prism](tests/fixtures/ugc-visual-showcase.ugc) or [KSH · Relay Circuit](tests/fixtures/relay-circuit.ksh).
+## Playback and inspection
+
+Use **Song speed** to slow down a passage or the format’s note-speed control to change how far ahead notes appear. In **Chart Inspector**, check the lane distribution, largest chord, and peak note density. Click the density graph to jump to a passage, or enable **Auto-follow** to keep the current measure in view.
 
 ## Virtual Cabinet mode
 
-Load a maimai chart, then enable **Virtual Cabinet mode** in its settings. Browse difficulties and adjust options using the cabinet buttons or keyboard, with animated menus, illuminated buttons and live upper displays. Drag to rotate, right-drag or Shift-drag to pan, and scroll to zoom.
+Load a maimai chart, then enable **Virtual Cabinet mode** in the maimai settings. Use the illuminated cabinet buttons or keyboard to choose a difficulty and start playback. Drag to rotate, right-drag or Shift-drag to pan, and scroll to zoom. The upper display shows achievement during play and a judgment breakdown at the end.
 
-Export a single station in portrait or both stations in landscape at **1080p60 with audio**, using five fixed camera presets. [Cabinet and export guide](docs/MAIMAI.md)
+![Wide view of both maimai cabinet stations during autoplay](docs/images/maimai-cabinet.gif)
+
+Use **Export MP4** to save the circular playfield, one cabinet station in portrait, or both stations in landscape at **1080p60 with audio**. The cabinet presets open a viewfinder so you can adjust the framing before rendering. [Cabinet and export guide](docs/MAIMAI.md#export-video)
 
 ## Roadmap
 

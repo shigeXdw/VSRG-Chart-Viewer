@@ -4,20 +4,23 @@
   // Original procedural artwork. Coordinates are projected CSS pixels; the
   // renderer owns projection, device-pixel scaling, and the chart-time clock.
   const PALETTES = Object.freeze({
-    t: ["#ffbfc9", "#ff526e", "#e71f4b", "#770e29"],
-    x: ["#fff8c1", "#ffe45b", "#e6a91c", "#835006"],
+    t: ["#ffaba8", "#f6413b", "#c71a26", "#700e19"],
+    x: ["#fffde1", "#fff279", "#f2cf28", "#b78b17"],
     f: ["#d7faff", "#5cdbff", "#258ed3", "#124477"],
     h: ["#fff6c6", "#ffc253", "#da820c", "#6e3a05"],
-    s: ["#e9ffff", "#74ebff", "#24b6df", "#125770"],
+    s: ["#d4edff", "#4087f0", "#2753c0", "#172d71"],
     a: ["#e4ffe2", "#91ff98", "#27db6d", "#126743"],
     pink: ["#ffe6f5", "#ffa2dd", "#f149ac", "#81385f"],
-    d: ["#ffbfcf", "#ff487b", "#a9164b", "#4b133b"],
+    d: ["#bbd7fc", "#2a58c4", "#182c73", "#080e29"],
   });
+  const actionFace = ["#fff0ff", "#f535e9", "#bb1db5"];
+  const slideFace = ["#bdffff", "#52edfa", "#16bdd0", "#067b91"];
+  const airPlateCorner = (width, depth) => Math.min(6, width / 2, depth / 2);
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const crushPalettes = new Map();
   function palette(type, color) {
     if (type === "C") {
-      const tint = /^#[0-9a-f]{6}$/i.test(color || "") ? color : "#c5f6ff";
+      const tint = /^#[0-9a-f]{6}$/i.test(color || "") ? color : "#b94dfa";
       if (!crushPalettes.has(tint)) {
         const channels = [1, 3, 5].map(i => parseInt(tint.slice(i, i + 2), 16));
         const shade = (factor, white = 0) => `rgb(${channels.map(c => Math.round(c * factor + 255 * white)).join(",")})`;
@@ -25,16 +28,15 @@
       }
       return crushPalettes.get(tint);
     }
-    if (["a", "H", "S", "C"].includes(type)) return color === "I" ? PALETTES.pink : PALETTES.a;
+    if (type === "a" && color === "I") return PALETTES.pink;
     return PALETTES[type === "T" ? "s" : type] || PALETTES.t;
   }
-  function groundNoteFace(ctx, left, top, width, height, inset = 0) {
+  function groundNoteFace(ctx, left, top, width, height, radius, inset = 0) {
     const w = Math.max(.1, width - inset * 2), h = Math.max(.1, height - inset * 2);
     // The camera projects this rectangle onto the lane. All four corners
     // share a radius so the texture adds no taper of its own.
-    const radius = Math.max(0, Math.min(height * .16, width * .10) - inset);
     ctx.beginPath();
-    ctx.roundRect(left + inset, top + inset, w, h, radius);
+    ctx.roundRect(left + inset, top + inset, w, h, Math.max(0, radius - inset));
   }
   function gradient(ctx, top, height, stops) {
     const fill = ctx.createLinearGradient(0, top, 0, top + Math.max(0.1, height));
@@ -42,44 +44,95 @@
     return fill;
   }
   function drawNote(ctx, {
-    x, y, width, height = 10, type = "t", direction = "R", color,
-    phase = 0, perspective = 1,
+    x, y, width, height = 10, type = "t", color,
+    phase = 0,
   }) {
     if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
     const w = Math.max(0.5, width), h = Math.max(1, height);
     const left = x - w / 2, top = y - h / 2;
-    const colors = palette(type, color);
+    const slide = type === "s" || type === "T";
+    const colors = type === "a" ? actionFace : slide ? slideFace : palette(type, color);
     const rim = clamp(h * 0.09, 0.55, 2.2);
+    const radius = type === "h" ? Math.min(h * .16, w * .10) : Math.min(h * .23, w * .14);
     ctx.save();
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
 
-    if (type === "a" || type === "C") {
-      // AIR markers are flat rectangular plates; their shallow side faces
-      // are projected separately by the renderer, not baked into a capsule.
-      const corner = type === "C" ? Math.min(5, h * .06) : 0;
+    if (type === "d") {
       ctx.beginPath();
-      ctx.moveTo(left + corner, top); ctx.lineTo(left + w - corner, top);
-      ctx.lineTo(left + w, top + corner); ctx.lineTo(left + w, top + h - corner);
-      ctx.lineTo(left + w - corner, top + h); ctx.lineTo(left + corner, top + h);
-      ctx.lineTo(left, top + h - corner); ctx.lineTo(left, top + corner); ctx.closePath();
-      ctx.fillStyle = gradient(ctx, top, h, [[0, colors[0]], [.2, colors[1]], [.75, colors[1]], [1, colors[2]]]);
-      ctx.fill(); ctx.strokeStyle = colors[0]; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.fillStyle = "rgba(248,255,244,.85)";
-      ctx.fillRect(left + w * .12, top + h * .16, w * .76, Math.max(1, h * .035));
+      ctx.roundRect(left, top, w, h, Math.min(2, w * .2, h * .1));
+      ctx.fillStyle = gradient(ctx, top, h, [[0, colors[1]], [.3, colors[2]], [1, colors[3]]]);
+      ctx.fill();
+      ctx.strokeStyle = colors[0]; ctx.lineWidth = rim;
+      ctx.stroke();
       ctx.restore(); return;
     }
 
+    if (type === "a" || type === "C") {
+      // Both AIR plates share the top outline. The renderer projects their side faces.
+      ctx.beginPath();
+      ctx.roundRect(left, top, w, h, airPlateCorner(w, h));
+      ctx.fillStyle = gradient(ctx, top, h, [[0, colors[1]], [.4, colors[1]], [1, colors[2]]]);
+      const alpha = ctx.globalAlpha;
+      if (type === "C") ctx.globalAlpha = alpha * .74;
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = colors[0];
+      ctx.lineWidth = clamp(h * .075, 1, 4.5);
+      ctx.shadowColor = colors[1];
+      ctx.shadowBlur = 5;
+      ctx.stroke();
+      ctx.restore(); return;
+    }
+
+    if (type === "f") {
+      const bezel = Math.min(h * .09, w * .045);
+      groundNoteFace(ctx, left, top, w, h, radius);
+      ctx.fillStyle = gradient(ctx, top, h, [[0, "#f5f6f7"], [.48, "#a9aeb8"], [1, "#edeff6"]]);
+      ctx.fill();
+      groundNoteFace(ctx, left, top, w, h, radius, bezel);
+      ctx.fillStyle = gradient(ctx, top, h, [[0, "#404854"], [.5, "#626972"], [1, "#454b58"]]);
+      ctx.fill();
+      ctx.save();
+      ctx.clip();
+      const reflection = ctx.createLinearGradient(left, 0, left + w, 0);
+      for (const [at, value] of [[.12, "#24eff800"], [.42, "#39c8f59b"], [.58, "#39c8f59b"], [.88, "#24eff800"]]) {
+        reflection.addColorStop(at, value);
+      }
+      ctx.fillStyle = reflection;
+      ctx.fillRect(left, top, w, h);
+      ctx.restore();
+      const padWidth = w * .43, padHeight = h * .72;
+      const padTop = y - padHeight / 2;
+      ctx.beginPath();
+      ctx.roundRect(x - padWidth / 2, padTop, padWidth, padHeight, Math.min(w * .045, h * .11));
+      ctx.fillStyle = gradient(ctx, padTop, padHeight, [[0, "#70eaff"], [.45, "#31bfdd"], [1, "#176482"]]);
+      ctx.fill();
+      ctx.strokeStyle = "#9ce4ee";
+      ctx.lineWidth = bezel * .43;
+      ctx.stroke();
+      ctx.fillStyle = "#defaff";
+      ctx.fillRect(x - padWidth * .19, y - h * .055, padWidth * .38, h * .11);
+      ctx.restore(); return;
+    }
+
+    if (slide || type === "x") {
+      const glow = type === "x" ? "#ffeb6788" : "#c98bfa80";
+      const bloomTop = top - h * .2;
+      ctx.fillStyle = gradient(ctx, bloomTop, h * .5, [[0, "transparent"], [.43, glow], [1, "transparent"]]);
+      ctx.fillRect(left + w * .05, bloomTop, w * .9, h * .5);
+    }
+
     // A small dark underside separates notes from bright hold/slide bodies.
-    groundNoteFace(ctx, left, top + h * 0.055, w, h);
+    groundNoteFace(ctx, left, top + h * 0.055, w, h, radius);
     ctx.fillStyle = "rgba(5,2,12,.72)";
     ctx.fill();
-    groundNoteFace(ctx, left, top, w, h);
+    groundNoteFace(ctx, left, top, w, h, radius);
     ctx.fillStyle = gradient(ctx, top, h, [
       [0, "#ffffff"], [0.18, "#fff9ed"], [0.56, "#c2c8ca"], [0.82, "#f4f2e9"], [1, "#858e91"],
     ]);
     ctx.fill();
-    groundNoteFace(ctx, left, top, w, h, rim);
+    groundNoteFace(ctx, left, top, w, h, radius, rim);
     ctx.fillStyle = gradient(ctx, top + rim, h - rim * 2, [
       [0, colors[0]], [0.2, colors[0]], [0.42, colors[1]], [0.69, colors[2]], [1, colors[3]],
     ]);
@@ -102,49 +155,25 @@
       ctx.stroke();
     }
 
-    if (type === "s" || type === "T") {
+    if (slide || type === "x") {
       const stripeWidth = Math.max(1, Math.min(w * 0.82, w - rim * 5));
-      ctx.fillStyle = "rgba(242,255,255,.95)";
-      ctx.fillRect(x - stripeWidth / 2, y - h * 0.025, stripeWidth, Math.max(0.6, h * 0.13));
-    } else if (type === "f" && w > 12) {
-      const sign = direction === "L" ? -1 : 1;
-      const count = Math.max(1, Math.min(7, Math.floor(w / Math.max(14, h * 1.5))));
-      const gap = Math.min(h * 1.7, w / (count + 1));
-      ctx.strokeStyle = "rgba(247,255,255,.98)";
-      ctx.lineWidth = clamp(h * 0.14, 0.8, 2.5);
-      for (let i = 0; i < count; i++) {
-        const cx = x + (i - (count - 1) / 2) * gap;
-        ctx.beginPath();
-        ctx.moveTo(cx - sign * h * 0.16, y - h * 0.21);
-        ctx.lineTo(cx + sign * h * 0.16, y);
-        ctx.lineTo(cx - sign * h * 0.16, y + h * 0.21);
-        ctx.stroke();
-      }
-    } else if (type === "x" && w > 10) {
-      // Two tiny glints give EX notes a gold rather than flat yellow appearance.
-      const pulse = 0.75 + Math.sin(phase * 4.2) * 0.2;
-      ctx.globalAlpha *= pulse;
-      ctx.strokeStyle = "#fffde5";
-      ctx.lineWidth = Math.max(0.6, Math.min(1.5, perspective));
-      for (const sx of [left + w * 0.16, left + w * 0.84]) {
-        ctx.beginPath();
-        ctx.moveTo(sx - h * 0.15, y);
-        ctx.lineTo(sx + h * 0.15, y);
-        ctx.moveTo(sx, y - h * 0.2);
-        ctx.lineTo(sx, y + h * 0.2);
-        ctx.stroke();
-      }
+      const ex = type === "x";
+      ctx.fillStyle = ex ? "#fffce0" : "#d2ffff";
+      const opacity = ex ? .84 + .16 * Math.sin(phase * 4.2) : .75;
+      ctx.globalAlpha *= opacity;
+      ctx.fillRect(x - stripeWidth / 2, y, stripeWidth, Math.max(0.6, h * (ex ? .16 : .09)));
     }
     ctx.restore();
   }
 
   const airChevron = [[-.46, .05], [0, .34], [.46, .05], [.46, .30], [0, .49], [-.46, .30]];
-  function drawAir(ctx, { x, y, width, height = 32, direction = "UC", color = "N", phase = 0 }) {
+  function drawAir(ctx, { x, y, width, height = 32, direction = "UC", color = "N" }) {
     if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
     const down = direction.startsWith("D");
     const pink = down !== (color === "I");
     const tint = pink ? "#ff91d1" : "#8dff98";
-    const top = y - height * .46, bottom = y + height * .46;
+    const top = y - height * .46;
+    const half = width * .46, tip = y + height * .1;
     const rim = Math.max(2, Math.min(8, width * .025));
     ctx.save();
     ctx.lineJoin = "round";
@@ -154,34 +183,31 @@
       ctx.translate(0, 2 * y);
       ctx.scale(1, -1);
     }
-    const trail = gradient(ctx, top, height * .8, [[0, "rgba(255,255,255,0)"], [.68, "rgba(255,255,255,.9)"], [1, tint]]);
-    ctx.fillStyle = trail;
-    ctx.save(); ctx.globalAlpha *= .4;
-    ctx.beginPath(); ctx.moveTo(x - width * .46, top); ctx.lineTo(x + width * .46, top);
-    ctx.lineTo(x + width * .46, y + height * .1); ctx.lineTo(x, y + height * .38);
-    ctx.lineTo(x - width * .46, y + height * .1); ctx.closePath(); ctx.fill(); ctx.restore();
-    for (let stripe = 0; stripe < 80; stripe++) {
-      const u = stripe / 79, wave = Math.sin(stripe * 2.7 + phase * 8);
-      const tip = y + height * (.10 + .28 * (1 - Math.abs(u * 2 - 1)));
-      const from = top + height * (.03 + .06 * wave);
-      ctx.fillRect(x - width * .46 + u * width * .92, from, width * .009, tip - from);
+    // Shear both halves by the slope of the arrow's trailing edge.
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.transform(-side, height * .29 / half, 0, 1, x + side * half, 0);
+      ctx.fillStyle = gradient(ctx, top, tip - top,
+        [[0, "rgba(255,255,255,0)"], [.68, "rgba(255,255,255,.9)"], [1, tint]]);
+      ctx.save(); ctx.globalAlpha *= .4;
+      ctx.beginPath(); ctx.rect(0, top, half, tip - top); ctx.fill(); ctx.restore();
+      for (let stripe = 0; stripe < 40; stripe++) {
+        const wave = Math.sin((side < 0 ? stripe : 79 - stripe) * 2.7);
+        const from = top + height * (.03 + .06 * wave);
+        ctx.fillRect((stripe + .5) * half / 40 - width * .0045, from, width * .009, tip - from);
+      }
+      ctx.restore();
     }
     ctx.beginPath();
     airChevron.forEach(([px, py], i) => i ? ctx.lineTo(x + px * width, y + py * height) : ctx.moveTo(x + px * width, y + py * height));
     ctx.closePath();
     const fill = ctx.createLinearGradient(x - width * .46, y, x + width * .46, y);
-    fill.addColorStop(0, pink ? "#d02ce9" : "#35c526");
-    fill.addColorStop(.48, pink ? "#ff9cfb" : "#a9ff9c");
-    fill.addColorStop(.51, pink ? "#f45eff" : "#68f861");
-    fill.addColorStop(1, pink ? "#f59bff" : "#afffa3");
+    fill.addColorStop(0, pink ? "#e840e1" : "#20d824");
+    fill.addColorStop(.48, pink ? "#ff70f0" : "#59fc41");
+    fill.addColorStop(.51, pink ? "#ee3cda" : "#1cda24");
+    fill.addColorStop(1, pink ? "#fc7aef" : "#63f845");
     ctx.fillStyle = fill; ctx.fill();
     ctx.strokeStyle = "#f4fff0"; ctx.lineWidth = rim; ctx.stroke();
-    ctx.save(); ctx.clip();
-    const roll = ((phase * -.53) % 1 + 1) % 1;
-    const shine = gradient(ctx, top + roll * height - height * .2, height * .2,
-      [[0, "rgba(255,255,255,0)"], [.65, "rgba(255,255,255,.28)"], [1, "rgba(255,255,255,0)"]]);
-    ctx.fillStyle = shine; ctx.fillRect(x - width / 2, top, width, bottom - top);
-    ctx.restore();
     ctx.restore();
   }
 
@@ -190,6 +216,66 @@
     value = Math.imul(value ^ (value >>> 16), 0x21f0aaad);
     value = Math.imul(value ^ (value >>> 15), 0x735a2d97);
     return ((value ^ (value >>> 15)) >>> 0) / 4294967296;
+  }
+  function flameTongue(ctx, x, y, radius, rise, drift) {
+    const tip = x + drift;
+    ctx.beginPath();
+    ctx.moveTo(x - radius, y);
+    ctx.bezierCurveTo(x - radius * 1.2, y - rise * .51, tip + radius * .29, y - rise * .6, tip, y - rise);
+    ctx.bezierCurveTo(tip + radius * .9, y - rise * .78, x + radius * .59, y - rise * .6, x + radius * .84, y - rise * .39);
+    ctx.bezierCurveTo(x + radius * 1.27, y - rise * .19, x + radius, y - rise * .07, x + radius, y);
+    ctx.quadraticCurveTo(x, y + 5, x - radius, y);
+    ctx.closePath(); ctx.fill();
+  }
+
+  const mineFramesByWidth = new Map();
+  function bakeMineFrames(span) {
+    const width = Math.max(64, span * 32), bodyArea = 64, backPad = 34, height = bodyArea + backPad, count = 12;
+    const canvas = document.createElement("canvas");
+    canvas.width = width; canvas.height = height * count;
+    const ctx = canvas.getContext("2d"), y = backPad + bodyArea / 2;
+    const tongues = span * 2 + 1, spacing = width * .58 / tongues;
+    return Array.from({ length: count }, (_, frame) => {
+      const phase = frame * Math.PI * 2 / count;
+      ctx.save();
+      ctx.translate(0, frame * height);
+      drawNote(ctx, { x: width / 2, y, width: width * .96, height: 43, type: "d" });
+      ctx.save();
+      ctx.translate(width / 2, y - 13);
+      ctx.scale(width * .43, 29);
+      const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      halo.addColorStop(0, "#36c9ffe0");
+      halo.addColorStop(.48, "#135bff65");
+      halo.addColorStop(1, "#1256ff00");
+      ctx.fillStyle = halo;
+      ctx.fillRect(-1, -1, 2, 2);
+      ctx.restore();
+      for (let i = 0; i < tongues; i++) {
+        const wave = phase + seededUnit(21, i) * Math.PI * 2;
+        const x = width * .21 + (i + .5 + (seededUnit(12, i) - .5) * .46) * spacing;
+        const radius = spacing * (.73 + seededUnit(35, i) * .36);
+        const rise = Math.min(y - 7, 32 + 23 * seededUnit(51, i) + 8 * Math.sin(wave));
+        const drift = radius * (.39 + .68 * Math.cos(wave + i));
+        ctx.fillStyle = gradient(ctx, y - rise, rise + 5,
+          [[0, "#2385ff00"], [.26, "#2262fc75"], [.62, "#199fffce"], [.83, "#45c1ffad"], [1, "#0f60fa00"]]);
+        ctx.shadowColor = "#286cff9a"; ctx.shadowBlur = 5;
+        flameTongue(ctx, x, y, radius, rise, drift);
+        ctx.shadowBlur = 0;
+        const core = rise * .57;
+        ctx.fillStyle = gradient(ctx, y - core, core + 5,
+          [[0, "#2a96ff00"], [.43, "#40bcffaa"], [.71, "#82e4ffba"], [1, "#43cbff00"]]);
+        flameTongue(ctx, x - radius * .13, y + 1, radius * .51, core, drift * .8);
+      }
+      ctx.restore();
+      return { canvas, region: [0, frame * height, width, height], backPadding: backPad / bodyArea };
+    });
+  }
+
+  function mineSprite(time, lanes = 1) {
+    const span = 2 ** Math.round(Math.log2(clamp(lanes, 1, 16)));
+    if (!mineFramesByWidth.has(span)) mineFramesByWidth.set(span, bakeMineFrames(span));
+    const frames = mineFramesByWidth.get(span), frame = Math.floor(time * 24) % frames.length;
+    return frames[(frame + frames.length) % frames.length];
   }
   function projectedPolygon(ctx, projectPoint, points) {
     ctx.beginPath();
@@ -203,6 +289,8 @@
   // Each palette shares one small sheet. Transparent gutters isolate filtered cells.
   const sprites = { ring: [0, 0, 128, 128], flash: [128, 0, 64, 64],
     spark: [128, 64, 32, 32], streak: [160, 64, 32, 32] };
+  const AIR_ACTION_TRAIL_TIME = .24, AIR_ACTION_BURST_TIME = .32;
+  const isAirAction = parentType => parentType === "H" || parentType === "S";
   const effectAtlases = new WeakMap();
   function effectAtlas(colors) {
     if (effectAtlases.has(colors)) return effectAtlases.get(colors);
@@ -225,8 +313,42 @@
     return canvas;
   }
 
+  let actionTrailTexture;
+  function airActionTrail() {
+    if (actionTrailTexture) return actionTrailTexture;
+    const canvas = document.createElement("canvas");
+    canvas.width = 32; canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = gradient(ctx, 0, canvas.height, [
+      [0, "#efffff00"], [.12, "#efffffbd"], [.29, "#f7ffff"], [.87, "#ffffff"], [1, "#eefff200"],
+    ]);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const edges = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    for (const [at, color] of [[0, "#ffffff00"], [.1, "#ffffff"], [.9, "#ffffff"], [1, "#ffffff00"]]) {
+      edges.addColorStop(at, color);
+    }
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.fillStyle = edges;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    actionTrailTexture = canvas;
+    return canvas;
+  }
+
   function drawHitFloor(hit, paint) {
     const { type, parentType, air, color, direction, age, worldWidth, projectPoint } = hit;
+    if (isAirAction(parentType)) {
+      if (age < 0 || age >= AIR_ACTION_TRAIL_TIME) return;
+      const retreat = age / AIR_ACTION_TRAIL_TIME;
+      // Keep the initial retreat gentle, then send the entire strip past the lane's far edge.
+      const travel = 2250 * retreat + 2600 * retreat ** 4;
+      const near = -40 + travel, far = 2180 + travel;
+      const half = worldWidth * .31, alpha = .63 * (1 - retreat) ** .8;
+      paint(airActionTrail(), undefined, [
+        projectPoint(-half, 0, far), projectPoint(half, 0, far),
+        projectPoint(half, 0, near), projectPoint(-half, 0, near),
+      ], alpha);
+      return;
+    }
     const kind = parentType || type, duration = kind === "C" ? .25 : .5;
     if (age < 0 || age >= duration || (!air && parentType && ["h", "s", "T"].includes(kind))) return;
     const progress = age / duration, ease = 1 - (1 - progress) ** 3;
@@ -237,6 +359,71 @@
     ], (1 - progress) ** 2);
     draw(sprites.ring, worldWidth * .36 + 60 * ease, 25 + 75 * ease, 0);
     if (age < .12) draw(sprites.flash, worldWidth * .48, 24, 1);
+  }
+
+  const actionBurstTextures = new Map();
+  const actionBurstCell = 160;
+  function airActionBurstTexture(inverted) {
+    if (actionBurstTextures.has(inverted)) return actionBurstTextures.get(inverted);
+    const canvas = document.createElement("canvas"), size = actionBurstCell, center = size / 2;
+    canvas.width = size * 2; canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const bright = inverted ? "#ff49ee" : "#99ff16";
+    const tint = inverted ? "#e421ce" : "#51ed08";
+    const halo = ctx.createRadialGradient(center, center, 0, center, center, center);
+    const hub = inverted ? "#ffd1a6" : "#ddff62";
+    for (const [at, value] of [[0, hub], [.14, bright + "f4"], [.34, tint + "91"], [.61, tint + "38"], [1, tint + "00"]]) {
+      halo.addColorStop(at, value);
+    }
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, size, size);
+
+    const rays = ctx.createRadialGradient(center, center, 0, center, center, center);
+    for (const [at, value] of [[0, hub], [.25, bright], [.55, bright + "d4"], [1, tint + "00"]]) {
+      rays.addColorStop(at, value);
+    }
+    ctx.fillStyle = rays;
+    for (let i = 0; i < 34; i++) {
+      const angle = (i + seededUnit(67, i) * .72) * Math.PI * 2 / 34;
+      const dx = Math.cos(angle), dy = Math.sin(angle);
+      const reach = center * (.45 + seededUnit(31, i) * .53), spread = 1.4 + seededUnit(61, i) * 2.2;
+      ctx.globalAlpha = .32 + seededUnit(19, i) * .66;
+      ctx.beginPath();
+      ctx.moveTo(center + dx * 12 - dy * spread, center + dy * 12 + dx * spread);
+      ctx.lineTo(center + dx * reach, center + dy * reach);
+      ctx.lineTo(center + dx * 12 + dy * spread, center + dy * 12 - dx * spread);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    const core = ctx.createRadialGradient(size + center, center, 0, size + center, center, center);
+    for (const [at, value] of [[0, "#fffef2"], [.22, "#fcffba"], [.42, bright + "dc"], [.68, tint + "6b"], [1, tint + "00"]]) {
+      core.addColorStop(at, value);
+    }
+    ctx.fillStyle = core;
+    ctx.fillRect(size, 0, size, size);
+    const flare = ctx.createLinearGradient(size + 2, 0, canvas.width - 2, 0);
+    for (const [at, value] of [[0, "#ffd57c00"], [.29, "#ffda7b73"], [.5, "#ffffdfed"], [.71, "#ffda7b73"], [1, "#ffd57c00"]]) {
+      flare.addColorStop(at, value);
+    }
+    ctx.fillStyle = flare;
+    ctx.fillRect(size + 2, center - 1.5, size - 4, 3);
+    actionBurstTextures.set(inverted, canvas);
+    return canvas;
+  }
+
+  function drawAirActionBurst(ctx, x, y, progress, inverted) {
+    const atlas = airActionBurstTexture(inverted), cell = actionBurstCell;
+    const rays = 112, core = 72;
+    ctx.save();
+    const alpha = ctx.globalAlpha;
+    ctx.globalAlpha = alpha * (1 - progress) ** 1.35;
+    ctx.drawImage(atlas, 0, 0, cell, cell, x - rays / 2, y - rays / 2, rays, rays);
+    const coreLife = Math.max(0, 1 - progress * 3.5);
+    if (coreLife > 0) {
+      ctx.globalAlpha = alpha * .88 * coreLife ** 1.35;
+      ctx.drawImage(atlas, cell, 0, cell, cell, x - core / 2, y - core / 2, core, core);
+    }
+    ctx.restore();
   }
 
   function hitPalette(kind, air, color, direction) {
@@ -291,9 +478,13 @@
 
   function drawHit(ctx, { x, y, width, worldWidth = width, projectPoint, type = "t", parentType, age, seed = 0, air = false, color, direction = "R" }) {
     const effectType = parentType || type;
-    const action = effectType === "H" || effectType === "S";
-    const duration = effectType === "C" ? .25 : effectType === "f" || action ? 1 : .5;
+    const action = isAirAction(parentType), airPathStart = !action && isAirAction(type);
+    const duration = action ? AIR_ACTION_BURST_TIME : effectType === "C" ? .25 : effectType === "f" || airPathStart ? 1 : .5;
     if (![x, y, width, age].every(Number.isFinite) || width <= 0 || age < 0 || age >= duration) return;
+    if (action) {
+      drawAirActionBurst(ctx, x, y, age / duration, color === "I");
+      return;
+    }
     const project = projectPoint || screenProjection(x, y);
     const progress = clamp(age / Math.min(duration, .5), 0, 1), life = (1 - progress) ** 2;
     const colors = hitPalette(effectType, air, color, direction);
@@ -322,7 +513,7 @@
         ctx.globalAlpha = initialAlpha * (1 - p) ** 2 * .6;
         projectedPolygon(ctx, mark, [[-5, 6], [6, 0], [-5, -6], [-5, -3], [1, 0], [-5, 3]]); ctx.fill();
       }
-    } else if (action) {
+    } else if (airPathStart) {
       ctx.globalAlpha = initialAlpha * (1 - age) ** 2 * .55;
       ctx.fillStyle = colors[1];
       for (let streak = -1; streak <= 1; streak++) {
@@ -363,5 +554,5 @@
     ctx.fill(); ctx.restore();
   }
 
-  window.UgcVisuals = Object.freeze({ drawNote, drawAir, drawHitFloor, drawHit, drawSustain });
+  window.UgcVisuals = Object.freeze({ airPlateCorner, drawNote, drawAir, mineSprite, drawHitFloor, drawHit, drawSustain });
 })();

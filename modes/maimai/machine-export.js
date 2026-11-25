@@ -18,6 +18,7 @@
     });
   }
   async function create(job, chart, field, jacket, signal) {
+    const lightOptions = job.machineLightOptions ?? MaiMachineSettings.buttonLights();
     const slot = Math.min(7, Math.max(1, chart.slot || 1));
     const [landscape, frame, fallback, judgments, timing] = await Promise.all(
       ["landscape", slot + "-monitor", "cover-fallback", "judgments", "timing"].map(name => image(name, signal))
@@ -26,7 +27,7 @@
     const monitor = document.createElement("canvas");
     monitor.width = 900; monitor.height = 350;
     const c = monitor.getContext("2d", {alpha:false, willReadFrequently:true});
-    const cabinet = await MaiCabinet.createExport(field, monitor, job.machineCamera);
+    const cabinet = await MaiCabinet.createExport(field, monitor, job.machineCamera, job.machineCameraOptions);
     if (signal.aborted) { cabinet.dispose(); signal.throwIfAborted(); }
     const end = MaiClear.end(chart), counts = chart.statsAt(Infinity, chart.noteCount).counts;
     let lastTop = "";
@@ -40,7 +41,7 @@
     function top(time) {
       const done = time >= end;
       const passed = MaiSimai.upper(chart.hitNotes, time, "time");
-      const rate = (chart.achievement[passed] || 0).toFixed(4);
+      const rate = MaiRenderer.achievementText(chart, passed, time);
       const caption = done ? "TRACK COMPLETE" : time < 0 ? "TRACK START" : "NOW PLAYING";
       const key = caption + rate;
       if (lastTop === key) return false;
@@ -53,7 +54,7 @@
         text("Lv " + chart.header.PLAYLEVEL, 854, 62, 36, "#ffffff", 145, "right");
         text(chart.header.TITLE, 561, 119, 22.5, "#ffffff", 585, "center");
         text("ACHIEVEMENT", 280, 191, 17.1, "#ffea92");
-        const glyphs = rate.split(".")[0].padStart(3, " ") + "." + rate.split(".")[1] + "%";
+        const glyphs = rate.padStart(9, " ");
         const widths = [0.66,0.66,0.66,0.32,0.60,0.60,0.60,0.60,0.80];
         let x = 558 - widths.reduce((a,b) => a+b, 0) * 79.2 / 2;
         c.textBaseline = "alphabetic"; c.textAlign = "center";
@@ -93,7 +94,7 @@
             cabinet.light(i, 0, "#ffffff", "button");
             cabinet.light(i, i === 3 || i === 4 ? 1 : 0, i === 3 ? "#ffad48" : "#63b6ff", "wall");
           }
-        } else MaiMachine.sampleLights(chart, time, cabinet.light);
+        } else MaiMachine.sampleLights(chart, time, cabinet.light, lightOptions);
         return cabinet.render(elapsed, monitorChanged ? c.getImageData(0, 0, monitor.width, monitor.height) : null);
       },
       close() { cabinet.dispose(); }

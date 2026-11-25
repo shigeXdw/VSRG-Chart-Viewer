@@ -22,16 +22,6 @@ Open a song folder or ZIP containing its `.sm` / `.ssc` chart, audio and Lua fil
 
 This is not a general StepMania Lua runtime. ActorFrames, tween commands, camera effects, arbitrary PlayerOptions calls and mod frameworks are not emulated. `#ATTACKS`, explicit SSC `#WARPS`, `#DELAYS` and `#FAKES` are also not implemented. The Scroll panel reports those tags, missing/unknown Lua scripts, malformed visual timing and unsupported foreground/background events instead of silently claiming full compatibility. These charts can still be inspected, but their playback may differ.
 
-## Validation
-
-`node --test tests/*.test.cjs` covers BPM-dependent movement, stop freezes, reversal/zero-scroll visibility, hold turns, speed transitions, difficulty overrides, script lifetime, deterministic seeking and unsupported-script diagnostics.
-
-Optional local integration check:
-
-```text
-node tests/stepmania-browser.cjs "path/to/local/test-songs"
-```
-
-Set `PLAYWRIGHT_MODULE` and `BROWSER_EXE` as for `tests/browser-smoke.cjs`. This checks the supplied Dum Surfer and Remilias Hell charts plus both Speedist files, playback and render timings. The songs and scripts remain outside the repository. Chromium was tested; this is not a full engine-to-engine visual comparison or a Firefox performance guarantee.
+## Behavior references
 
 The independent implementation uses StepMania's [ArrowEffects](https://github.com/stepmania/stepmania/blob/5_1-new/src/ArrowEffects.cpp) and [TimingData](https://github.com/stepmania/stepmania/blob/5_1-new/src/TimingData.cpp) as behavioral references. No reference source was copied into the viewer.

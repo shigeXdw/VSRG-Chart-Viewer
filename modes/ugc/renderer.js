@@ -5,12 +5,16 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const AIR = new Set(["a", "H", "S", "C"]);
   const FIELD_COLORS = ["#d8dae6", "#ed576e", "#ec9b5e", "#e4ca61", "#b9dd5f", "#73d78d", "#62cfc7", "#739fdf", "#a577d2"];
-  const CRUSH_COLORS = { "0": "#c5f6ff", "1": "#ff565d", "2": "#ffad54", "3": "#ffe76b", "4": "#b8f763", "5": "#71fba1", "6": "#6df4df", "7": "#70d9ff", "8": "#82b5ff", "9": "#7d89ff", A: "#aa91ff", Y: "#df7bff", B: "#ffa1da", C: "#ffffff", D: "#484654" };
+  const CRUSH_COLORS = { "0": "#b94dfa", "1": "#ff565d", "2": "#ffad54", "3": "#ffe76b", "4": "#b8f763", "5": "#71fba1", "6": "#6df4df", "7": "#70d9ff", "8": "#82b5ff", "9": "#7d89ff", A: "#aa91ff", Y: "#df7bff", B: "#ffa1da", C: "#ffffff", D: "#484654" };
   const WARP_DEPTH = 5120;
   const HORIZON = 0.84;
   const AIR_DEPTH_PER_HEIGHT = .3125;
   const AIR_LINE_HALF_WIDTH = 28;
   const AIR_WIDTH_RATIO = 0.75;
+  const AIR_ARROW_HEIGHT = 233;
+  const AIR_ARROW_TOP_FADE = 0.15;
+  const AIR_ARROW_PERIOD = 0.365;
+  const GROUND_CAP_DEPTH = 96;
 
   function scrollDuration(speed = 6) {
     speed = Number.isFinite(Number(speed)) ? clamp(Number(speed), 1, 20) : 6;
@@ -139,11 +143,11 @@
     const canvas = document.createElement("canvas"); canvas.width = 256; canvas.height = 4;
     const context = canvas.getContext("2d"), fill = context.createLinearGradient(0, 0, 256, 0);
     for (let i = 0; i <= 32; i++) {
-      const strength = Math.pow(Math.sin(i / 32 * Math.PI), .65);
+      const strength = Math.pow(Math.sin(i / 32 * Math.PI), kind === "h" ? .65 : .48);
       const color = kind === "h"
         ? `rgba(${Math.round(lerp(193,255,strength))},${Math.round(lerp(120,222,strength))},${Math.round(lerp(222,67,strength))},${lerp(.38,.98,strength)})`
-        : kind === "stripe" ? "rgba(239,255,255,.7)"
-        : `rgba(${Math.round(lerp(169,45,strength))},${Math.round(lerp(237,191,strength))},${Math.round(lerp(249,226,strength))},.85)`;
+        : kind === "stripe" ? "rgba(168,250,255,.75)"
+        : `rgba(${Math.round(lerp(92,18,strength))},${Math.round(lerp(137,204,strength))},255,${lerp(.28,.8,strength)})`;
       fill.addColorStop(i / 32, color);
     }
     context.fillStyle = fill; context.fillRect(0, 0, 256, 4);
@@ -187,10 +191,19 @@
     ctx.restore();
   }
 
+  function airRibbonSpan(ctx, f, { a, b, da, db }, inverted) {
+    const strip = (halfWidth, color) => {
+      const at = (p, d, side) => project(f, p.x + p.width / 2 + side * Math.min(p.width / 2, halfWidth / 64), d, p.height ?? 8);
+      polygon(ctx, [at(a, da, -1), at(a, da, 1), at(b, db, 1), at(b, db, -1)], color);
+    };
+    strip(AIR_LINE_HALF_WIDTH, inverted ? "rgba(239,114,247,.17)" : "rgba(125,255,36,.17)");
+    strip(16, inverted ? "rgba(239,114,247,.35)" : "rgba(125,255,36,.35)");
+    strip(8, inverted ? "#e77df2" : "#7aff09");
+    strip(1.7, "rgba(250,255,221,.85)");
+  }
+
   function ribbon(ctx, f, path, spans, gpu) {
     const air = AIR.has(path.type), hold = path.type === "h";
-    const inverted = path.color === "I";
-    const tint = path.type === "C" ? CRUSH_COLORS[path.color === "Y" ? "0" : path.color] || "#c5f6ff" : inverted ? "#ee92ce" : "#8be99e";
     if (!air) {
       const ratio = gpu ? 1 : Math.abs(ctx.getTransform?.()?.a || 1);
       const paint = (texture, quad) => {
@@ -202,54 +215,56 @@
         const quad = [project(f, b.x, db), project(f, b.x + b.width, db), project(f, a.x + a.width, da), project(f, a.x, da)];
         paint(texture, quad);
         if (stripe) {
-          const leftA = a.x + a.width / 2 - Math.min(a.width * .42, 34 / 64), rightA = a.x + a.width - (leftA - a.x);
-          const leftB = b.x + b.width / 2 - Math.min(b.width * .42, 34 / 64), rightB = b.x + b.width - (leftB - b.x);
+          const leftA = a.x + a.width / 2 - Math.min(a.width * .16, 8 / 64), rightA = a.x + a.width - (leftA - a.x);
+          const leftB = b.x + b.width / 2 - Math.min(b.width * .16, 8 / 64), rightB = b.x + b.width - (leftB - b.x);
           const center = [project(f, leftB, db), project(f, rightB, db), project(f, rightA, da), project(f, leftA, da)];
           if (gpu) paint(stripe, center);
           else {
             for (const point of center) point.y = Math.round(point.y * ratio) / ratio;
-            polygon(ctx, center, "rgba(239,255,255,.7)");
+            polygon(ctx, center, "rgba(168,250,255,.75)");
           }
         }
       }
       return;
     }
-    for (const { a, b, da, db } of spans) {
-      if (path.type === "C") {
-        const halfWidth = path.color === "0" ? 14 : 7;
-        const edge = (p, d, side, size) => project(f, p.x + p.width / 2 + side * size / 64, d, p.height || 0);
-        for (const [size, alpha] of [[halfWidth, .22], [halfWidth * .72, .55], [halfWidth * .42, 1]]) {
-          ctx.save(); ctx.globalAlpha *= alpha;
-          polygon(ctx, [edge(a, da, -1, size), edge(a, da, 1, size), edge(b, db, 1, size), edge(b, db, -1, size)], tint);
-          ctx.restore();
-        }
-        continue;
+    if (path.type === "H" || path.type === "S") {
+      const inverted = path.color === "I";
+      const { a: head, da: depth } = spans[0];
+      if (head === path.points[0] && (head.height ?? 8) > 0) {
+        // Connect the visible start arrow to the authored path for rendering only.
+        const base = { x: head.x, width: head.width, height: 0 };
+        airRibbonSpan(ctx, f, { a: base, b: head, da: depth, db: depth }, inverted);
       }
-      if (path.type === "H" || path.type === "S") {
-        const strip = (halfWidth, color) => {
-          const at = (p, d, side) => project(f, p.x + p.width / 2 + side * Math.min(p.width / 2, halfWidth / 64), d, p.height ?? 8);
-          polygon(ctx, [at(a, da, -1), at(a, da, 1), at(b, db, 1), at(b, db, -1)], color);
-        };
-        strip(AIR_LINE_HALF_WIDTH, inverted ? "rgba(239,114,247,.17)" : "rgba(125,255,36,.17)");
-        strip(16, inverted ? "rgba(239,114,247,.35)" : "rgba(125,255,36,.35)");
-        strip(8, inverted ? "#e77df2" : "#7aff09");
-        strip(1.7, "rgba(250,255,221,.85)");
-        continue;
+      for (const span of spans) airRibbonSpan(ctx, f, span, inverted);
+      return;
+    }
+    if (path.type !== "C") return;
+    const tint = path.color === "0" || path.color === "Y" ? "#c5f6ff" : CRUSH_COLORS[path.color] || "#c5f6ff";
+    const halfWidth = path.color === "0" ? 14 : 7;
+    for (const { a, b, da, db } of spans) {
+      const edge = (p, d, side, size) => project(f, p.x + p.width / 2 + side * size / 64, d, p.height || 0);
+      for (const [size, alpha] of [[halfWidth, .22], [halfWidth * .72, .55], [halfWidth * .42, 1]]) {
+        ctx.save(); ctx.globalAlpha *= alpha;
+        polygon(ctx, [edge(a, da, -1, size), edge(a, da, 1, size), edge(b, db, 1, size), edge(b, db, -1, size)], tint);
+        ctx.restore();
       }
     }
   }
 
   const textureCaches = new WeakMap();
+  function capDepth(type) {
+    return AIR.has(type) ? 80 : type === "h" ? 108.56 : GROUND_CAP_DEPTH;
+  }
+
   function noteTexture(type, width, direction, color, time, arrow) {
     const visual = window.UgcVisuals;
     if (!textureCaches.has(visual)) textureCaches.set(visual, new Map());
     const cache = textureCaches.get(visual), margin = 4;
     const worldWidth = Math.max(8, Math.round(width * 64 / 8) * 8 - (AIR.has(type) && !arrow ? 8 : 0));
-    const worldHeight = arrow ? 233 : AIR.has(type) ? 80 : 108.56;
-    // Bounded original texture cache. Phase variants animate the shine/trail,
-    // while projection is recomputed continuously at the actual chart time.
-    const phase = arrow || type === "x" ? Math.floor(((time % 1.6 + 1.6) % 1.6) * 10) : 0;
-    const key = [type, worldWidth, arrow ? direction[0] : direction, color, phase, arrow].join(":");
+    const worldHeight = arrow ? AIR_ARROW_HEIGHT : capDepth(type);
+    // AIR scrolls through a repeated static texture on its fixed mesh.
+    const phase = type === "x" ? Math.floor(((time % 1.6 + 1.6) % 1.6) * 10) : 0;
+    const key = [type, worldWidth, arrow ? direction[0] : "", color, phase, arrow].join(":");
     const hit = cache.get(key);
     if (hit) {
       cache.delete(key); cache.set(key, hit);
@@ -257,48 +272,56 @@
     }
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil((worldWidth + margin * 2) * 2);
-    canvas.height = Math.ceil((worldHeight + margin * 2) * 2);
+    const tileHeight = Math.ceil((worldHeight + margin * 2) * 2);
+    canvas.height = arrow ? tileHeight * 2 : tileHeight;
     const context = canvas.getContext("2d");
     context.scale(2, 2);
     // Leave transparent space fore and aft of the ground face on its projected quad.
     const faceHeight = AIR.has(type) ? worldHeight : worldHeight * 0.70;
     const options = { x: margin + worldWidth / 2, y: margin + worldHeight / 2,
-      width: worldWidth, height: faceHeight, type, direction, color, phase: phase / 10, perspective: 1 };
-    if (arrow) visual.drawAir(context, options); else visual.drawNote(context, options);
-    const texture = { canvas, margin, worldHeight };
+      width: worldWidth, height: faceHeight, type, direction, color, phase: phase / 10 };
+    if (arrow) {
+      visual.drawAir(context, options);
+      // Bake a second copy so one source window can cross the seam.
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.drawImage(canvas, 0, 0, canvas.width, tileHeight, 0, tileHeight, canvas.width, tileHeight);
+    } else visual.drawNote(context, options);
+    const texture = { canvas, margin, tileHeight };
     if (cache.size >= 192) cache.delete(cache.keys().next().value);
     cache.set(key, texture);
     return texture;
   }
 
-  function noteQuad(f, point, depth, type, margin = 0) {
+  function noteQuad(f, point, depth, type, margin = 0, backPadding = 0) {
     const air = AIR.has(type);
     const elevation = air ? (point.height ?? 8) + (type === "C" ? 5.33336 : 12) * 16 / 466 : 0;
-    const halfDepth = ((AIR.has(type) ? 80 : 108.56) / 2 + margin) / WARP_DEPTH;
+    const halfDepth = (capDepth(type) / 2 + margin) / WARP_DEPTH;
+    const back = depth + halfDepth * (1 + 2 * backPadding);
     const left = point.x + ((air ? 4 : 0) - margin) / 64, right = point.x + point.width - ((air ? 4 : 0) - margin) / 64;
-    return [project(f, left, depth + halfDepth, elevation), project(f, right, depth + halfDepth, elevation),
+    return [project(f, left, back, elevation), project(f, right, back, elevation),
       project(f, right, depth - halfDepth, elevation), project(f, left, depth - halfDepth, elevation)];
   }
 
   function arrowQuad(f, point, depth, margin = 0) {
     const direction = point.direction || "UC";
-    const lean = direction.endsWith("L") ? -150 / 64 : direction.endsWith("R") ? 150 / 64 : 0;
+    const lateral = direction.endsWith("L") ? -150 / 64 : direction.endsWith("R") ? 150 / 64 : 0;
+    const lean = direction.startsWith("D") ? -lateral : lateral;
     const half = point.width * AIR_WIDTH_RATIO / 2 + margin / 64;
     const center = point.x + point.width / 2, left = center - half, right = center + half;
     // A diagonal shifts the entire 233-unit mesh up by 16 units.
     const base = lean ? 16 : 0;
-    const top = (base + 233 + margin) * 16 / 466, bottom = (base - margin) * 16 / 466;
+    const top = (base + AIR_ARROW_HEIGHT) * 16 / 466, bottom = base * 16 / 466;
     return [project(f, left + lean, depth, top), project(f, right + lean, depth, top),
       project(f, right, depth, bottom), project(f, left, depth, bottom)];
   }
 
-  function surface(ctx, f, texture, quad, region) {
+  function surface(ctx, f, texture, quad, region, topFade = 0) {
     const [tl, tr, br, bl] = quad, height = bl.y - tl.y;
     // Elevated horizontal faces can pass above the camera. Reflect the
     // scan direction together with the canvas, retaining the original UVs.
     if (height < -.001) {
       ctx.save(); ctx.translate(0, f.height); ctx.scale(1, -1);
-      surface(ctx, f, texture, quad.map(p => ({ ...p, y: f.height - p.y })), region);
+      surface(ctx, f, texture, quad.map(p => ({ ...p, y: f.height - p.y })), region, topFade);
       ctx.restore(); return;
     }
     if (height <= .001 || Math.max(tr.x, br.x) < 0 || Math.min(tl.x, bl.x) > f.width) return;
@@ -319,30 +342,107 @@
     const band = step * Math.max(1, Math.floor(Math.min(height, widthLimit, depthLimit) / step));
     ctx.save();
     ctx.transform(1, 0, shear, 1, -shear * tl.y, 0);
-    for (let y = top; y < bottom; y += band) {
-      const end = Math.min(bottom, y + band), t0 = clamp((y - tl.y) / height, 0, 1), t1 = clamp((end - tl.y) / height, 0, 1);
+    const alpha = ctx.globalAlpha;
+    for (let start = top; start < bottom; start += band) {
+      const end = Math.min(bottom, start + band);
+      const t0 = clamp((start - tl.y) / height, 0, 1), t1 = clamp((end - tl.y) / height, 0, 1);
+      const v0 = vAt(t0), v1 = vAt(t1);
       const w = lerp(topWidth, bottomWidth, (t0 + t1) / 2);
-      const sy = sourceY + vAt(t0) * sourceHeight, sh = (vAt(t1) - vAt(t0)) * sourceHeight;
-      if (sh > 0 && w > 0) ctx.drawImage(texture, sx, sy, sw, sh, (tl.x + tr.x - w) / 2, y, w, end - y);
+      const sy = sourceY + v0 * sourceHeight, sh = (v1 - v0) * sourceHeight;
+      if (sh <= 0 || w <= 0) continue;
+      const x = (tl.x + tr.x - w) / 2;
+      if (v0 >= topFade) {
+        if (topFade) ctx.globalAlpha = alpha;
+        ctx.drawImage(texture, sx, sy, sw, sh, x, start, w, end - start);
+        continue;
+      }
+      // Subdivide the fade without changing the parent band's texture mapping.
+      const sourcePerRow = sh / (end - start);
+      for (let y = start; y < end;) {
+        const fading = vAt(clamp((y - tl.y) / height, 0, 1)) < topFade;
+        const next = fading ? Math.min(end, y + step) : end;
+        const ramp = Math.min(1, vAt(clamp(((y + next) / 2 - tl.y) / height, 0, 1)) / topFade);
+        ctx.globalAlpha = alpha * ramp * ramp * (3 - 2 * ramp);
+        ctx.drawImage(texture, sx, sy + sourcePerRow * (y - start), sw, sourcePerRow * (next - y), x, y, w, next - y);
+        y = next;
+      }
     }
     ctx.restore();
   }
 
-  const faceTextures = new Map();
+  const faceTextures = new Map(), crushGlowTextures = new Map();
+  const CRUSH_GLOW_HEIGHT = 1.9;
+  const actionRungColors = Array.from({ length: 8 }, (_, i) => {
+    const opacity = .65 * (1 - i / 9);
+    return [`rgba(225,86,248,${opacity})`, `rgba(121,44,164,${opacity})`];
+  });
+
+  function crushGlowTexture(color) {
+    if (crushGlowTextures.has(color)) return crushGlowTextures.get(color);
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    const h = canvas.height;
+    const glow = ctx.createLinearGradient(0, 0, 0, h);
+    glow.addColorStop(0, color + "00");
+    glow.addColorStop(.24, color + "0e");
+    glow.addColorStop(.57, color + "58");
+    glow.addColorStop(.8, color + "9e");
+    glow.addColorStop(1, color + "b0");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, canvas.width, h);
+    const edges = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    edges.addColorStop(0, "#ffffff00");
+    edges.addColorStop(.17, "#ffffff");
+    edges.addColorStop(.83, "#ffffff");
+    edges.addColorStop(1, "#ffffff00");
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.fillStyle = edges;
+    ctx.fillRect(0, 0, canvas.width, h);
+    crushGlowTextures.set(color, canvas);
+    return canvas;
+  }
+
+  function drawAirActionRungs(ctx, f, point, depth) {
+    const height = point.height ?? 8;
+    const spacing = .92, center = point.x + point.width / 2;
+    const count = Math.min(actionRungColors.length, Math.floor((height - .2) / spacing));
+    const front = depth - 22 / WARP_DEPTH, rear = depth + 11 / WARP_DEPTH;
+    for (let rung = count; rung > 0; rung--) {
+      const elevation = height - rung * spacing;
+      const lower = elevation - .12;
+      const half = point.width / 2 * (.98 - rung * .017);
+      const left = center - half, right = center + half;
+      const frontLeft = project(f, left, front, elevation), frontRight = project(f, right, front, elevation);
+      const [topInk, frontInk] = actionRungColors[rung - 1];
+      polygon(ctx, [project(f, left, rear, elevation), project(f, right, rear, elevation),
+        frontRight, frontLeft], topInk);
+      polygon(ctx, [frontLeft, frontRight, project(f, right, front, lower), project(f, left, front, lower)],
+        frontInk);
+    }
+  }
+
   function plateWalls(ctx, f, point, depth, type, tint, gpu) {
-    const crush = type === "C", half = point.width * 32 - 4, cut = crush ? Math.min(5, half, 80 * .06) : 0;
-    const outline = cut
-      ? [[-half + cut, 40], [half - cut, 40], [half, 40 - cut], [half, -40 + cut],
-        [half - cut, -40], [-half + cut, -40], [-half, -40 + cut], [-half, 40 - cut]]
-      : [[-half, 40], [half, 40], [half, -40], [-half, -40]];
+    const crush = type === "C", half = point.width * 32 - 4;
+    const cut = window.UgcVisuals.airPlateCorner(half * 2, 80);
+    const outline = [[-half + cut, 40], [half - cut, 40], [half, 40 - cut], [half, -40 + cut],
+      [half - cut, -40], [-half + cut, -40], [-half, -40 + cut], [-half, 40 - cut]];
     const center = point.x + point.width / 2, elevation = point.height ?? 8;
     const top = elevation + (crush ? 5.33336 : 12) * 16 / 466, bottom = elevation - (crush ? 2.66664 : 6) * 16 / 466;
     const cameraX = (8 - center) * 64, cameraZ = -856 - depth * WARP_DEPTH - elevation * 466 / 16 * AIR_DEPTH_PER_HEIGHT;
-    const color = crush ? tint || "#c5f6ff" : tint === "I" ? "#bf5398" : "#44b564";
+    const color = crush ? tint + "b8" : "#746388";
     const at = ([x, z], h) => project(f, center + x / 64, depth + z / WARP_DEPTH, h);
     for (let i = 0; i < outline.length; i++) {
       const a = outline[i], b = outline[(i + 1) % outline.length];
       if ((b[0] - a[0]) * (cameraZ - a[1]) <= (b[1] - a[1]) * (cameraX - a[0])) continue;
+      if (crush && a[1] === -40 && b[1] === -40) {
+        const texture = crushGlowTexture(tint), upper = top + CRUSH_GLOW_HEIGHT;
+        const wall = [at([b[0], 40], upper), at([a[0], 40], upper), at(a, bottom), at(b, bottom)];
+        if (gpu) gpu.draw(texture, wall, f.width, f.height);
+        else surface(ctx, f, texture, wall);
+        continue;
+      }
       const wall = [at(a, top), at(b, top), at(b, bottom), at(a, bottom)];
       if (gpu) {
         if (!faceTextures.has(color)) {
@@ -391,15 +491,29 @@
     ctx.restore();
   }
 
-  function noteHead(ctx, f, point, depth, type, time, color, gpu) {
+  function noteHead(ctx, f, point, depth, type, time, color, gpu, arrowPhase) {
+    if (type === "d") {
+      const phase = time + point.x * .027 + point.time * .31;
+      const { canvas, region, backPadding } = window.UgcVisuals.mineSprite(phase, point.width);
+      const quad = noteQuad(f, point, depth, type, 4, backPadding);
+      if (gpu) gpu.draw(canvas, quad, f.width, f.height, region);
+      else surface(ctx, f, canvas, quad, region);
+      return;
+    }
     const arrow = isArrow(point, type);
-    const textureType = AIR.has(type) && type !== "C" ? "a" : type;
-    const tint = type === "C" ? CRUSH_COLORS[color || point.color] : color || point.color || "N";
-    const texture = noteTexture(textureType, point.width, point.direction || "UC", tint, time, arrow);
-    const quad = arrow ? arrowQuad(f, point, depth, texture.margin) : noteQuad(f, point, depth, type, texture.margin);
-    if (!arrow && AIR.has(type)) plateWalls(ctx, f, point, depth, type, tint, gpu);
-    if (gpu) gpu.draw(texture.canvas, quad, f.width, f.height);
-    else surface(ctx, f, texture.canvas, quad);
+    const textureType = point.exStart && !point.generated ? "x" : AIR.has(type) && type !== "C" ? "a" : type;
+    const tint = type === "C" ? CRUSH_COLORS[color || point.color] || CRUSH_COLORS["0"] : color || point.color || "N";
+    const direction = point.direction || "UC";
+    const { canvas, margin, tileHeight } = noteTexture(textureType, point.width, direction, tint, time, arrow);
+    const quad = arrow ? arrowQuad(f, point, depth, margin) : noteQuad(f, point, depth, textureType, margin);
+    let region;
+    if (arrow) {
+      const offset = direction.startsWith("D") ? 1 - arrowPhase : arrowPhase;
+      region = [0, offset * tileHeight, canvas.width, tileHeight];
+    } else if (AIR.has(type)) plateWalls(ctx, f, point, depth, type, tint, gpu);
+    const topFade = arrow ? AIR_ARROW_TOP_FADE : 0;
+    if (gpu) gpu.draw(canvas, quad, f.width, f.height, region, 1, topFade);
+    else surface(ctx, f, canvas, quad, region, topFade);
   }
 
   function lowerBound(rows, time) {
@@ -535,23 +649,28 @@
     ctx.save(); ctx.textBaseline = "middle";
     ctx.save(); ctx.scale(scale, scale); ctx.translate(8, 5);
     const rect = (x, y, w, h, fill) => { ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); };
-    const label = (txt, x, y, font, color, max) => {
-      ctx.textAlign = "left"; ctx.font = font; ctx.fillStyle = color;
+    const label = (txt, x, y, font, color, max, align = "left") => {
+      ctx.textAlign = align; ctx.font = font; ctx.fillStyle = color;
       ctx.fillText(max === undefined ? txt : fitText(ctx, txt, max), x, y);
     };
-    const gold = ctx.createLinearGradient(0, 0, 0, 69);
-    gold.addColorStop(0, "#ffe35a"); gold.addColorStop(.52, "#fff5bd"); gold.addColorStop(1, "#dab648");
-    rect(0, 0, width, 70, "#12131a"); rect(2, 2, left - 3, 66, gold);
-    const nameX = compact ? 12 : 65;
+    rect(0, 0, width, 70, "#12131a");
+    label("CHART VIEWER", 10, 8, "800 9px system-ui", "#f7d756");
+    const profileFill = ctx.createLinearGradient(0, 16, left, 68);
+    profileFill.addColorStop(0, "#eace66");
+    profileFill.addColorStop(.44, "#fff7ce");
+    profileFill.addColorStop(1, "#eed17a");
+    rect(1, 16, left - 2, 52, profileFill);
+    polygon(ctx, [{ x:1, y:16 }, { x:left * .74, y:16 }, { x:left * .55, y:68 }, { x:1, y:68 }], "#ffffff40");
+    polygon(ctx, [{ x:left * .86, y:16 }, { x:left - 1, y:16 }, { x:left - 1, y:35 }], "#cd9a3255");
+    rect(1, 66, left - 2, 2, "#d1ae53");
     if (!compact) {
-      // Profile emblem for the viewer's autoplay card.
-      rect(8, 8, 49, 54, "#282431");
-      polygon(ctx, [{x:12,y:12},{x:52,y:12},{x:52,y:48},{x:32,y:59},{x:12,y:48}], "#ffcf4d", "#fff4bb", 2);
-      polygon(ctx, [{x:24,y:22},{x:43,y:34},{x:24,y:45}], "#2e2530");
+      rect(4, 18, 48, 46, "#272432");
+      polygon(ctx, [{ x:12, y:22 }, { x:44, y:22 }, { x:44, y:50 }, { x:28, y:59 }, { x:12, y:50 }],
+        "#ffd259", "#fff4bc", 1.5);
+      polygon(ctx, [{ x:23, y:30 }, { x:38, y:40 }, { x:23, y:50 }], "#2e2530");
     }
-    rect(nameX - 4, 8, left - nameX - 3, 18, "#fffbe4");
-    label("CHART VIEWER", nameX, 17, "900 11px system-ui", "#302a19");
-    label("AUTO PLAY", nameX, 42, compact ? "900 16px system-ui" : "900 22px system-ui", "#1d1a18", left - nameX - 4);
+    const nameX = compact ? 10 : 59;
+    label("AUTO PLAY", nameX, 42, compact ? "900 16px system-ui" : "900 25px system-ui", "#25212b", left - nameX - 5);
     const sx = compact ? 0 : left + 4, sy = compact ? 72 : 0, sw = compact ? width : mid;
     rect(sx, sy, sw, 70, "#161722");
     const prism = ctx.createLinearGradient(sx, sy + 16, sx + sw, sy + 67);
@@ -587,7 +706,9 @@
     rect(tx - 2, 18, available, 26, "#201e28"); rect(tx - 2, 18, 4, 26, accent);
     label(chart.header.UGC_DIFFICULTY || "CHART", tx + 5, 32, "900 16px system-ui", "#fff", available - 52);
     rect(rx + right - 43, 19, 39, 24, accent);
-    label("LV " + (chart.header.PLAYLEVEL || "—"), rx + right - 40, 31, "900 10px system-ui", "#fff", 35);
+    if (chart.header.UGC_WEATTR)
+      label(chart.header.UGC_WEATTR, rx + right - 23.5, 31, "900 18px system-ui", "#201e28", 35, "center");
+    else label("LV " + (chart.header.PLAYLEVEL || "—"), rx + right - 40, 31, "900 10px system-ui", "#fff", 35);
     label(chart.header.TITLE, tx, 51, "800 12px system-ui", "#24212c", available);
     label(chart.header.ARTIST, tx, 62, "600 9px system-ui", "#5b5563", available);
     ctx.restore();
@@ -638,7 +759,7 @@
       const ticks = path.tickNotes || [];
       for (let i = lowerBound(ticks, visualTime); i < ticks.length && ticks[i].time <= until; i++) addHead(ticks[i], "C", path.color);
     }
-    visible.sort((a, b) => b.depth - a.depth);
+    visible.sort((a, b) => b.depth - a.depth || Number(a.type === "x") - Number(b.type === "x"));
     const airPaths = paths.filter(p => AIR.has(p.path.type));
     const groundPaths = paths.filter(p => !AIR.has(p.path.type));
     if (groundPaths.length) {
@@ -647,11 +768,17 @@
       gpu?.end(ctx, width, height);
     }
     judgment(ctx, f);
+    const arrowCycle = visualTime / AIR_ARROW_PERIOD;
+    const arrowPhase = arrowCycle - Math.floor(arrowCycle);
     const drawHeads = air => {
       const heads = visible.filter(h => AIR.has(h.type) === air);
       if (!heads.length) return;
+      // Project the supports on the main canvas to keep the AIR sprite pass batched.
+      if (air) for (const { point, depth, type } of heads) {
+        if ((type === "H" || type === "S") && point.parentType) drawAirActionRungs(ctx, f, point, depth);
+      }
       const gpu = window.UgcSurfaces?.begin(ctx, f);
-      heads.forEach(h => noteHead(ctx, f, h.point, h.depth, h.type, visualTime, h.color, gpu));
+      heads.forEach(h => noteHead(ctx, f, h.point, h.depth, h.type, visualTime, h.color, gpu, arrowPhase));
       gpu?.end(ctx, width, height);
     };
     const drawGroundSustains = () => {
@@ -677,7 +804,7 @@
         const elevation = air && !isArrow(p, type) ? p.height ?? 8 : 0;
         const center = project(f, p.x + p.width / 2, 0, elevation);
         const projectPoint = (x, y, z = 0) => project(f, p.x + p.width / 2 + x / 64, z / WARP_DEPTH, elevation + y * 16 / 466);
-        hits.push({ x: center.x, y: center.y, width: p.width * 64 * center.scale, worldWidth: p.width * 64, projectPoint, type: p.type,
+        hits.push({ x: center.x, y: center.y, width: p.width * 64 * center.scale, worldWidth: p.width * 64, projectPoint, type: p.exStart ? "x" : p.type,
           parentType: p.parentType, age: visualTime - p.time, seed: index, air, direction: p.direction, color: type === "C" ? CRUSH_COLORS[p.color] : p.color });
       }
       if (hits.length) {

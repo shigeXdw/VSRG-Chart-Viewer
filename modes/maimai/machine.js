@@ -32,6 +32,27 @@
     artUrls = new Map(),
     lastTop = "";
   const menus = new Set(["songs", "difficulty", "ready", "settings"]);
+  const menuSoundFiles = {
+    Left: "select", Right: "select", "Next category": "select", "Previous category": "select",
+    Options: "ui-click", Increase: "ui-click", Decrease: "ui-click",
+    Next: "ui-confirm", Done: "ui-confirm", "Start track": "ui-confirm", Back: "ui-back"
+  };
+  const menuSoundRoot = new URL("../../assets/maimai-ui/audio/", document.currentScript.src);
+  const menuSounds = new Map();
+  function preloadMenuSounds() {
+    if (menuSounds.size) return;
+    for (const file of new Set(Object.values(menuSoundFiles))) {
+      menuSounds.set(file, new Audio(new URL(file + ".wav", menuSoundRoot).href));
+    }
+  }
+  function playMenuSound(file) {
+    const clip = menuSounds.get(file);
+    const volume = api.volume() * 0.4;
+    if (!clip || volume === 0) return;
+    clip.volume = volume;
+    clip.currentTime = 0;
+    clip.play().catch(() => {});
+  }
   const lightIndex = new WeakMap();
   const active = () => phase !== "off";
   const choices = () => songs[song] || [];
@@ -119,6 +140,45 @@
     buttons[i].style.setProperty(prefix + "power", value);
     buttons[i].style.setProperty(prefix + "light", color);
     MaiCabinet.light(i, value, color, kind);
+  }
+  function lightLevel(afterRelease, { linger, fade }) {
+    if (afterRelease < linger) return 1;
+    if (!fade) return 0;
+    const progress = Math.min(1, (afterRelease - linger) / fade);
+    return 1 - progress * progress * (3 - 2 * progress);
+  }
+  const reducedLightMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  let lightPreviewFrame = 0;
+  function stopLightPreview() {
+    cancelAnimationFrame(lightPreviewFrame);
+    lightPreviewFrame = 0;
+  }
+  function refreshLightPreview() {
+    const wasPreviewing = Boolean(lightPreviewFrame);
+    stopLightPreview();
+    const setting = phase === "settings" && MaiMachineSettings.lightPreview();
+    if (!setting) {
+      if (wasPreviewing && phase === "settings") controls();
+      return;
+    }
+    const lights = MaiMachineSettings.buttonLights();
+    const since = performance.now();
+    function preview(now) {
+      if (!player.hidden && !document.hidden) {
+        const elapsed = (now - since) / 1000;
+        const hold = 0.18;
+        const cycle = hold + lights.linger + lights.fade + 0.45;
+        const pulse = reducedLightMotion.matches ? 1 : lightLevel(elapsed % cycle - hold, lights);
+        const dark = reducedLightMotion.matches ? 0 : Math.floor(elapsed / 0.28) % 8;
+        for (let i = 0; i < 8; i++) {
+          const timing = setting === "timing";
+          light(i, timing ? (i % 2 ? 0 : pulse) : (setting === "button" && i !== dark ? 1 : 0), lights.button || "#ef4386", "button");
+          light(i, timing ? (i % 2 ? pulse : 0) : (setting === "wall" && i !== dark ? 1 : 0), lights.wall || "#1fd7fc", "wall");
+        }
+      }
+      lightPreviewFrame = requestAnimationFrame(preview);
+    }
+    preview(since);
   }
   function action(key) {
     if (phase === "playing" || phase === "off") return "";
@@ -274,7 +334,7 @@
     title.textContent = sound ? "SPEED & SOUND" : "VIEWER OPTIONS";
     icon.className = "machine-option-icon";
     icon.textContent = sound ? "♫" : "⚙";
-    detail.textContent = sound ? "Approach speed · Song speed · Volume" : "Background · Sensors · Combo · Effects";
+    detail.textContent = sound ? "Approach speed · Song speed · Volume" : "Background · Display · Button lights";
     value.textContent = MaiMachineSettings.summary();
     card.append(title, icon, detail, value);
     return card;
@@ -314,15 +374,17 @@
     monitor(c, settings ? "Game settings" : showingSongs ? "Song select" : ready ? "Track ready" : "Difficulty select",
       "Lv " + c.header.PLAYLEVEL, "DIFFICULTY", c.header.ARTIST);
     controls();
+    refreshLightPreview();
     bloom(true);
   }
   function setPhase(next) {
-    if (phase !== next && phase !== "off") MaiCabinet.transition?.();
+    if (next !== "settings") stopLightPreview();
+    const browsing = menus.has(next);
+    if (phase !== next && phase !== "off" && (browsing || menus.has(phase))) MaiCabinet.transition?.();
     if (next === "ready") readyChoice = 1;
     phase = next;
     host.dataset.phase = next;
     lastTop = "";
-    const browsing = menus.has(next);
     menu.hidden = !browsing;
     player.classList.toggle("machine-browsing", browsing);
     if (browsing) {
@@ -373,11 +435,12 @@
       summary.replaceChildren(table, timing);
     }
   }
-  function change(c, all) {
+  function change(c, all, keepPlaybackView = false) {
     chart = c;
     blockedSampling = false;
     lastBloom = -Infinity;
     if (!enabled || c?.modeId !== "maimai") {
+      stopLightPreview();
       MaiCabinet.close();
       if (active()) {
         panel.insertBefore(canvas, host);
@@ -406,11 +469,12 @@
     if (song < 0) return;
     diff = choices().indexOf(c);
     if (!active()) {
+      preloadMenuSounds();
       host.hidden = false;
       player.classList.add("machine-mode");
       glass.prepend(canvas);
     }
-    setPhase(launching ? "playing" : "difficulty");
+    setPhase(launching || keepPlaybackView ? "playing" : "difficulty");
     MaiCabinet.open({
       host,
       shell,
@@ -432,6 +496,7 @@
   }
   function returnToSelect() {
     if (!active()) return;
+    playMenuSound("ui-back");
     api.stop();
     setPhase("difficulty");
     shell.focus({ preventScroll: true });
@@ -445,6 +510,7 @@
       returnToSelect();
       return;
     }
+    playMenuSound(menuSoundFiles[op]);
     if (phase === "settings") {
       if (op === "Done" || op === "Back") setPhase("ready");
       else {
@@ -452,6 +518,7 @@
         else if (op === "Increase" || op === "Decrease") MaiMachineSettings.adjust(op === "Increase" ? 1 : -1);
         else { MaiCabinet.transition?.(); MaiMachineSettings.category(op === "Next category" ? 1 : -1); }
         text("machineChoice", MaiMachineSettings.label());
+        refreshLightPreview();
       }
       return;
     }
@@ -534,15 +601,13 @@
     lightIndex.set(c, lanes);
     return lanes;
   }
-  function sampleLights(c, time, write) {
+  function sampleLights(c, time, write, options = MaiMachineSettings.buttonLights()) {
     const lanes = lightIndex.get(c) || buildLights(c);
     for (const kind of ["button", "wall"]) for (let i = 0; i < 8; i++) {
       const lane = lanes[kind][i],
         n = lane[MaiSimai.upper(lane, time, "time") - 1];
-      // Hold the hit color for half a second, then ease back to unlit plastic.
-      const release = n ? Math.min(1, Math.max(0, (time - n.until - 0.5) / 0.25)) : 1;
-      const level = 1 - release * release * (3 - 2 * release);
-      write(i, level * (n?.power ?? 1), n?.color || "#fff3a4", kind);
+      const level = n ? lightLevel(time - n.until, options) : 0;
+      write(i, level * (n?.power ?? 1), options[kind] ?? n?.color ?? "#fff3a4", kind);
     }
   }
   function frame(c, time) {
@@ -552,12 +617,11 @@
     const done = time >= (end || c.duration);
     if (done && phase !== "result") setPhase("result");
     if (!done && phase === "result") setPhase("playing");
-    const passed = MaiSimai.upper(c.hitNotes, time, "time"),
-      rate = c.achievement[passed] || 0;
+    const passed = MaiSimai.upper(c.hitNotes, time, "time");
     monitor(
       c,
       done ? "Track complete" : time < 0 ? "Track start" : "Now playing",
-      rate.toFixed(4) + "%",
+      MaiRenderer.achievementText(c, passed, time),
       "Achievement",
       c.header.CHARTNAME + " · Lv " + c.header.PLAYLEVEL + " · " + passed + " / " + c.noteCount
     );
@@ -638,8 +702,8 @@
     setting.onchange = () => {
       enabled = setting.checked;
       localStorage.setItem("vsrg-mai-machine", enabled ? "on" : "off");
-      if (enabled && api.chart()?.modeId === "maimai") api.stop();
-      change(api.chart(), api.library());
+      const keepPlaybackView = enabled && (api.running() || api.hasPlaybackPosition());
+      change(api.chart(), api.library(), keepPlaybackView);
       api.resize();
     };
     document.addEventListener(

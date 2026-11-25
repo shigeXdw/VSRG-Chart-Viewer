@@ -1,6 +1,6 @@
 # SOUND VOLTEX charts
 
-Open a K-Shoot MANIA or Unnamed SDVX Clone (USC) song folder with **Open folder**, or select its ZIP with **Open files**. Each `.ksh` is a difficulty in the chart selector. Include the referenced audio, images, video and samples when opening individual files. For a short demo, open [Relay Circuit](../tests/fixtures/relay-circuit.ksh).
+Open a K-Shoot MANIA or Unnamed SDVX Clone (USC) song folder with **Open folder**, or select its ZIP with **Open files**. Each `.ksh` is a difficulty in the chart selector. Include the referenced audio, images, video and samples when opening individual files.
 
 ## Playback and inspection
 

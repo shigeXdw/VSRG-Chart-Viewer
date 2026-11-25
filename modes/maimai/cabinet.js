@@ -2,16 +2,35 @@
   "use strict";
   const root = new URL("../../", document.currentScript.src);
   const presets = {
-    left: {label:"Left angle", width:1080, height:1920, fov:17, position:[-153,51,213], target:[-23.3031,12.5,3]},
-    right: {label:"Right angle", width:1080, height:1920, fov:17, position:[153,51,213], target:[23.3031,12.5,3]},
+    left: {label:"Left angle", width:1080, height:1920, fov:17, distanceScale:0.8333333333333334, position:[-153,51,213], target:[-27.3031,12.5,3]},
+    right: {label:"Right angle", width:1080, height:1920, fov:17, distanceScale:0.8333333333333334, position:[153,51,213], target:[27.3031,12.5,3]},
     center: {label:"Centered station", width:1080, height:1920, fov:18.5, position:[-27.3031,51,253], target:[-27.3031,12.5,3]},
     both: {label:"Both centered", width:1920, height:1080, fov:17, position:[0,55,290], target:[0,12,3]},
-    angled: {label:"Both angled", width:1920, height:1080, fov:17, position:[-105,65,278], target:[0,12,3]}
+    angled: {label:"Both angled", width:1920, height:1080, fov:17, distanceScale:0.8695652173913043, position:[-105,65,278], target:[0,12,3]}
   };
   let enabled = false,
     loading,
     view,
-    settings;
+    settings,
+    preview;
+
+  function frameCamera(camera, preset, pose) {
+    const [x, y, z] = preset.target;
+    camera.aspect = preset.width / preset.height;
+    camera.fov = preset.fov;
+    if (pose) {
+      camera.position.fromArray(pose.position);
+      camera.quaternion.fromArray(pose.quaternion);
+      camera.zoom = pose.zoom;
+    } else {
+      const distance = preset.distanceScale ?? 1;
+      const [px, py, pz] = preset.position;
+      camera.zoom = distance;
+      camera.position.set(x + (px - x) * distance, y + (py - y) * distance, z + (pz - z) * distance);
+      camera.lookAt(x, y, z);
+    }
+    camera.updateProjectionMatrix();
+  }
 
   function script(path) {
     return new Promise((resolve, reject) => {
@@ -44,6 +63,7 @@
       ]);
       if (enabled) {
         view = build(settings);
+        view.setPreview(preview);
         view.show();
       }
       status.remove();
@@ -59,39 +79,87 @@
     const T = window.MaiThree;
     const scene = new T.Scene(),
       uiScene = new T.Scene();
-    const camera = new T.PerspectiveCamera(33, 1, 1, 650);
-    const renderer = new T.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.outputColorSpace = T.SRGBColorSpace;
-    renderer.setPixelRatio(exportOptions ? 1 : Math.min(devicePixelRatio || 1, 1.75));
-    renderer.domElement.className = "machine-model-canvas";
-    renderer.domElement.setAttribute(
-      "aria-label",
-      "3D DX cabinet. Drag to rotate, right-drag or Shift-drag to pan, scroll to zoom."
-    );
+    const orbitCamera = new T.PerspectiveCamera(33, 1, 1, 650);
+    const presetCamera = new T.PerspectiveCamera(33, 1, 1, 650);
+    let camera = orbitCamera;
+    const stage = document.createElement("div"), viewport = document.createElement("div");
+    stage.className = "machine-model-stage";
+    viewport.className = "machine-model-frame";
+    stage.append(viewport);
+    host.append(stage);
+    const outputOptions = exportOptions?.options;
+    let antialias = exportOptions ? outputOptions?.antialias !== false : (preview?.antialias ?? true);
+    function makeRenderer(smooth) {
+      const result = new T.WebGLRenderer({ alpha: true, antialias: smooth });
+      result.outputColorSpace = T.SRGBColorSpace;
+      result.setPixelRatio(exportOptions ? 1 : Math.min(devicePixelRatio || 1, 1.75));
+      // Only the camera and LED colors change between frames.
+      result.shadowMap.enabled = true;
+      result.shadowMap.autoUpdate = false;
+      result.shadowMap.needsUpdate = true;
+      result.domElement.addEventListener("webglcontextrestored", () => {
+        result.shadowMap.needsUpdate = true;
+      });
+      result.domElement.className = "machine-model-canvas";
+      result.domElement.setAttribute("aria-label", "3D cabinet view");
+      return result;
+    }
+    let renderer = makeRenderer(antialias);
     const css = new T.CSS3DRenderer();
     css.domElement.className = "machine-model-screens";
-    host.append(renderer.domElement, css.domElement);
-    const controls = new T.OrbitControls(camera, host);
+    viewport.append(renderer.domElement, css.domElement);
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
-    controls.enableDamping = !reducedMotion.matches;
-    controls.dampingFactor = 0.09;
-    controls.enablePan = true;
-    controls.screenSpacePanning = true;
-    controls.panSpeed = 0.8;
-    controls.minDistance = 35;
-    controls.maxDistance = 430;
-    controls.minPolarAngle = 0;
-    controls.maxPolarAngle = Math.PI;
-    controls.rotateSpeed = 0.65;
-    controls.zoomSpeed = 0.65;
-    controls.target.set(0, 0, 0);
-    scene.add(new T.HemisphereLight(0xb8d4ff, 0x252737, 0.9));
-    const key = new T.DirectionalLight(0xe8edff, 1.35);
-    key.position.set(-90, 110, 150);
+    function makeControls(object, element) {
+      const orbit = new T.OrbitControls(object, element);
+      orbit.enableDamping = !reducedMotion.matches;
+      orbit.dampingFactor = 0.09;
+      orbit.screenSpacePanning = true;
+      orbit.panSpeed = 0.8;
+      orbit.minDistance = 35;
+      orbit.maxDistance = 430;
+      orbit.rotateSpeed = 0.65;
+      orbit.zoomSpeed = 0.65;
+      return orbit;
+    }
+    const orbitControls = makeControls(orbitCamera, viewport);
+    let controls = orbitControls;
+    scene.add(new T.HemisphereLight(0xb8d4ff, 0x252737, 0.74));
+    const key = new T.DirectionalLight(0xe8edff, 1.52);
+    key.position.set(-105, 125, 145);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.normalBias = 0.08;
+    key.shadow.bias = -0.0001;
     scene.add(key);
-    const fill = new T.DirectionalLight(0xa4c6ff, 0.65);
+    const fill = new T.DirectionalLight(0xa4c6ff, 0.58);
     fill.position.set(90, 20, -100);
     scene.add(fill);
+    const cabinetParts = new T.Group();
+    scene.add(cabinetParts);
+    function addCabinetPart(mesh) {
+      mesh.castShadow = mesh.receiveShadow = true;
+      cabinetParts.add(mesh);
+    }
+    function fitShadowCamera() {
+      key.updateMatrixWorld();
+      key.shadow.updateMatrices(key);
+      cabinetParts.updateMatrixWorld(true);
+      const lightCamera = key.shadow.camera;
+      let bounds;
+      for (const mesh of cabinetParts.children) {
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        const lightTransform = mesh.matrixWorld.clone().premultiply(lightCamera.matrixWorldInverse);
+        const meshBounds = mesh.geometry.boundingBox.clone().applyMatrix4(lightTransform);
+        bounds = bounds ? bounds.union(meshBounds) : meshBounds;
+      }
+      const padding = 2;
+      Object.assign(lightCamera, {
+        left: bounds.min.x - padding, right: bounds.max.x + padding,
+        bottom: bounds.min.y - padding, top: bounds.max.y + padding,
+        near: -bounds.max.z - padding, far: -bounds.min.z + padding
+      });
+      lightCamera.updateProjectionMatrix();
+    }
     function geometry(data) {
       function bytes(value) {
         return fflate.unzlibSync(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)));
@@ -257,8 +325,8 @@
     const lightingTexture = new T.CanvasTexture(lightingCanvas);
     lightingTexture.generateMipmaps = false;
     lightingTexture.minFilter = T.LinearFilter;
-    // A small baked falloff texture avoids shadow maps, full-screen bloom,
-    // per-button lights, and artifacts from the CAD model's large triangles.
+    // A small baked falloff texture models LED spill without adding lights
+    // or bloom and avoids artifacts from the CAD model's large triangles.
     function litBody(material, region = 0) {
       const result = material.clone();
       if (region === 2) result.roughness = 0.38; // Preserve the canopy diffuser finish.
@@ -353,15 +421,15 @@
       return result;
     }
     const body = new T.Mesh(geometry(MaiCabinetMesh.body), [litBody(plastic), litBody(dark), litBody(plastic, 2), litBody(dark, 3)]);
-    scene.add(body);
+    addCabinetPart(body);
     const occluders = [body];
-    scene.add(new T.Mesh(geometry(MaiCabinetMesh.console), [plastic, dark]));
+    addCabinetPart(new T.Mesh(geometry(MaiCabinetMesh.console), [plastic, dark]));
     const footGeometry = geometry(MaiCabinetMesh.foot);
     for (const x of [-47, 47])
       for (const z of [-13, 12]) {
         const foot = new T.Mesh(footGeometry, [plastic, dark]);
         foot.position.set(x, -60.3, z);
-        scene.add(foot);
+        addCabinetPart(foot);
       }
     // Each material belongs to one actual raised cap in the source mesh.
     const ringMaterials = [ringPlastic, ...lampMaterials];
@@ -501,7 +569,7 @@
       const ring = new T.Mesh(ringGeometry, ringMaterials);
       ring.rotation.x = angle;
       ring.position.copy(center).addScaledVector(normal, 1.86);
-      scene.add(ring);
+      addCabinetPart(ring);
       buttonRings.push(ring);
       const display = new T.Mesh(new T.CircleGeometry(14.39, 128), displayMaterial);
       display.position.copy(center).addScaledVector(normal, screenDepth);
@@ -530,17 +598,14 @@
         surface(top, "machine-model-monitor", new T.Vector3(x, 35.1191, -2.2433), 29.43, 900, 350);
       }
     }
-    let width = 0, height = 0, frame = 0, dirtyTexture = true;
+    fitShadowCamera();
+    let width = 0, height = 0, frame = 0, dirtyTexture = true, framing = null;
     if (exportOptions) {
       const preset = presets[exportOptions.preset];
       controls.enabled = false;
       renderer.setClearColor(0x000000, 1);
       renderer.setSize(preset.width, preset.height);
-      camera.aspect = preset.width / preset.height;
-      camera.fov = preset.fov;
-      camera.position.set(...preset.position);
-      camera.lookAt(...preset.target);
-      camera.updateProjectionMatrix();
+      frameCamera(camera, preset, outputOptions?.pose);
       return {
         canvas: renderer.domElement,
         light(index, power, color, kind) {
@@ -568,11 +633,49 @@
             }
           });
           for (const item of [...geometries, ...materials, ...textures, openingMaterial, transitionMaterial]) item.dispose();
+          key.shadow.dispose();
           renderer.dispose(); renderer.forceContextLoss(); host.replaceChildren();
         }
       };
     }
 
+    const viewfinder = host.querySelector("#maiCameraTools");
+    viewport.append(viewfinder);
+    viewfinder.addEventListener("pointerdown", event => event.stopPropagation());
+    viewfinder.addEventListener("wheel", event => event.stopPropagation());
+    const previewControls = makeControls(presetCamera);
+    const shots = new Map();
+    const zoomReadout = viewfinder.querySelector("#maiCameraZoomValue");
+    let guideTimeout;
+    function hideGuides() {
+      clearTimeout(guideTimeout);
+      viewfinder.classList.remove("is-framing");
+    }
+    function showGuides() {
+      if (!framing) return;
+      clearTimeout(guideTimeout);
+      viewfinder.classList.add("is-framing");
+      guideTimeout = setTimeout(hideGuides, 550);
+    }
+    function updateZoomReadout() {
+      const { position, target, distanceScale = 1 } = framing.preset;
+      const baseline = distanceScale * Math.hypot(position[0] - target[0], position[1] - target[1], position[2] - target[2]);
+      const value = (baseline / previewControls.getDistance()).toFixed(1) + "×";
+      if (zoomReadout.value !== value) zoomReadout.value = value;
+    }
+    previewControls.addEventListener("change", () => {
+      if (!framing) return;
+      updateZoomReadout();
+      showGuides();
+    });
+    function currentShot() {
+      return {
+        position: presetCamera.position.toArray(),
+        quaternion: presetCamera.quaternion.toArray(),
+        zoom: presetCamera.zoom,
+        target: previewControls.target.toArray()
+      };
+    }
     const toolbar = document.createElement("div");
     toolbar.className = "machine-model-tools";
     const help = document.createElement("span");
@@ -602,21 +705,70 @@
     reset.onclick = resetView;
     toolbar.addEventListener("pointerdown", (e) => e.stopPropagation());
     toolbar.addEventListener("wheel", (e) => e.stopPropagation());
+    function setPreview(next, resetFraming = false) {
+      const changed = framing?.id !== next?.id;
+      if (framing && changed) shots.set(framing.id, currentShot());
+      framing = next;
+      host.classList.toggle("machine-camera-preview", Boolean(next));
+      if (!next) hideGuides();
+      if (changed) {
+        controls.disconnect();
+        controls = next ? previewControls : orbitControls;
+        controls.connect(viewport);
+        camera = controls.object;
+      }
+      if (next && (changed || resetFraming)) {
+        const { id, preset } = next;
+        host.style.setProperty("--camera-frame-width", (100 * preset.width / preset.height) + "cqh");
+        host.style.setProperty("--camera-frame-height", (100 * preset.height / preset.width) + "cqw");
+        const pose = resetFraming ? null : shots.get(id);
+        const damping = previewControls.enableDamping;
+        previewControls.enableDamping = false;
+        previewControls.update();
+        frameCamera(presetCamera, preset, pose);
+        previewControls.target.fromArray(pose?.target ?? preset.target);
+        previewControls.update();
+        previewControls.enableDamping = damping;
+        updateZoomReadout();
+        showGuides();
+      }
+      controls.enabled = enabled;
+      const smooth = next?.antialias ?? true;
+      if (smooth !== antialias) {
+        const replacement = makeRenderer(smooth);
+        renderer.domElement.replaceWith(replacement.domElement);
+        key.shadow.dispose();
+        key.shadow.map = null;
+        renderer.dispose();
+        renderer.forceContextLoss();
+        renderer = replacement;
+        antialias = smooth;
+        dirtyTexture = true;
+        width = height = 0;
+      }
+      resize();
+      if (!next && height) {
+        orbitCamera.aspect = width / height;
+        orbitCamera.updateProjectionMatrix();
+      }
+    }
     function resize() {
-      const box = host.getBoundingClientRect();
+      const box = viewport.getBoundingClientRect();
       if (!box.width || !box.height || (box.width === width && box.height === height)) return;
       width = box.width;
       height = box.height;
       renderer.setSize(width, height);
       css.setSize(width, height);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
+      if (!framing) {
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      }
     }
     const raycaster = new T.Raycaster(),
       pointer = new T.Vector2();
     let down;
-    host.addEventListener("pointerdown", (e) => {
-      if (!enabled || e.target.closest(".machine-model-tools")) return;
+    viewport.addEventListener("pointerdown", (e) => {
+      if (!enabled) return;
       down = {
         x: e.clientX,
         y: e.clientY,
@@ -626,16 +778,16 @@
       };
       host.focus({ preventScroll: true });
     });
-    host.addEventListener("pointermove", (e) => {
+    viewport.addEventListener("pointermove", (e) => {
       if (down && down.id === e.pointerId && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5)
         down.moved = true;
     });
-    host.addEventListener("pointerup", (e) => {
+    viewport.addEventListener("pointerup", (e) => {
       if (!down || down.id !== e.pointerId) return;
       const select = down.select && !down.moved;
       down = null;
       if (!select) return;
-      const box = host.getBoundingClientRect();
+      const box = viewport.getBoundingClientRect();
       pointer.set(((e.clientX - box.left) / width) * 2 - 1, 1 - ((e.clientY - box.top) / height) * 2);
       raycaster.setFromCamera(pointer, camera);
       const hit = raycaster.intersectObjects([...occluders, ...buttonRings], false)[0];
@@ -644,7 +796,7 @@
         if (key >= 1 && key <= 8) press(key);
       }
     });
-    host.addEventListener("pointercancel", () => {
+    viewport.addEventListener("pointercancel", () => {
       down = null;
     });
     function tick(now) {
@@ -725,6 +877,19 @@
         .multiplyScalar(Number(button.style.getPropertyValue("--wall-power") || 0));
     });
     return {
+      setPreview,
+      showGuides,
+      resetPreview() {
+        if (framing) setPreview(framing, true);
+      },
+      zoomPreview(inward) {
+        if (!framing) return;
+        if (inward) previewControls.dollyIn(0.88);
+        else previewControls.dollyOut(0.88);
+      },
+      capturePreview(id) {
+        return framing?.id === id ? currentShot() : shots.get(id);
+      },
       show() {
         host.classList.add("machine-model-active");
         host.tabIndex = -1;
@@ -752,7 +917,15 @@
   }
   window.MaiCabinet = {
     presets,
-    async createExport(canvas, monitorCanvas, preset) {
+    setPreview(id, antialias = true) {
+      preview = Object.hasOwn(presets, id) ? { id, preset: presets[id], antialias } : null;
+      view?.setPreview(preview);
+    },
+    showPreviewGuides() { view?.showGuides(); },
+    resetPreview() { view?.resetPreview(); },
+    zoomPreview(inward) { view?.zoomPreview(inward); },
+    capturePreview(id) { return view?.capturePreview(id); },
+    async createExport(canvas, monitorCanvas, preset, options) {
       if (!presets[preset]) throw new Error("Unknown machine camera preset.");
       await Promise.all([
         window.MaiThree || script("vendor/three.min.js?v=4"),
@@ -760,7 +933,7 @@
       ]);
       const host = document.createElement("div"), menu = document.createElement("div");
       menu.hidden = true;
-      return build({host, menu, canvas, buttons:[], exportOptions:{preset, monitorCanvas}});
+      return build({host, menu, canvas, buttons:[], exportOptions:{preset, monitorCanvas, options}});
     },
     open,
     close() {

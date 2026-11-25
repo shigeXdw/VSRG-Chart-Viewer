@@ -980,7 +980,7 @@
     ui.title.textContent = c.header.TITLE || c.name;
     ui.artist.textContent = chartArtistLabel(c);
     ui.genre.textContent = c.header.GENRE || "VSRG";
-    ui.difficulty.textContent = c.header.PLAYLEVEL || "--";
+    ui.difficulty.textContent = c.header.UGC_WEATTR || c.header.PLAYLEVEL || "--";
     ui.difficulty.classList.remove("osu-pill", "expert-plus");
     ui.difficulty.style.removeProperty("--level-bg");
     ui.difficulty.style.removeProperty("--star-text-color");
@@ -1650,6 +1650,7 @@
     loadBgaAsset(path, slotName === "layer", Boolean(event?.bmsonLayer)).then((asset) => {
       const wanted = slotName === "base" ? state.bgaWantedBase : state.bgaWantedLayer;
       if (!asset || wanted !== path || state.chart !== chart) return;
+      const currentTime = chart.modeId === "sdvx" ? time : chartTimeNow();
       if (asset.kind !== "video") current?.media?.pause();
       const slot = { ...asset, path, eventTime: event.time, mediaOffset: event.mediaOffset || 0 };
       if (slotName === "base") state.bgaBase = slot;
@@ -1662,11 +1663,11 @@
         if (media.getAttribute("src") !== slot.url) media.src = slot.url;
         media.playbackRate = playbackSpeed();
         media.preservesPitch = !ui.pitchWithSpeed.checked;
-        media.currentTime = Math.max(0, time - event.time + slot.mediaOffset);
+        media.currentTime = Math.max(0, currentTime - slot.eventTime + slot.mediaOffset);
         if (state.playing) media.play().catch(() => {});
       }
       renderBgaFrame();
-      if (!state.playing && chart.modeId === "maimai") draw(time);
+      if (!state.playing && chart.modeId === "maimai") draw(currentTime);
     });
   }
 
@@ -1839,7 +1840,7 @@
       ui.play.disabled = false;
     }
     // Rebuild the visible state before asynchronous audio preparation.
-    // A slow or failed resume must not leave the previous shutter on screen.
+    // A slow or failed resume must not leave the previous frame on screen.
     draw(target);
     if (resume && target < endTime) await play();
   }
@@ -3194,7 +3195,14 @@
       chart: () => state.chart, library: () => state.charts, file: path => findFile(path,"image"),
       select: index => { ui.select.value=String(index); selectChart(index); },
       stop, play, running: () => state.playing || state.starting,
-      resize: () => { if(state.view==="player"){syncCanvasSize();draw(state.pausedAt);} }
+      volume: () => Number(ui.volume.value),
+      hasPlaybackPosition: () => state.seekPreview !== null ||
+        state.pausedAt !== -(state.chart?.mode?.introDuration || 0),
+      resize: () => {
+        if (state.view !== "player") return;
+        syncCanvasSize();
+        draw(chartTimeNow());
+      }
     });
     KshSkins.bind(() => { if (state.chart?.modeId === "sdvx") draw(chartTimeNow()); });
     const kshSpeed = $("kshSpeed");

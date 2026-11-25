@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VSRG Chart Viewer</title>
   <link rel="stylesheet" href="styles.css?v=49">
-  <link rel="stylesheet" href="modes/maimai/machine.css?v=13">
+  <link rel="stylesheet" href="modes/maimai/machine.css?v=17">
   <link rel="stylesheet" href="assets/maimai-ui/themes.css?v=1">
-  <link rel="stylesheet" href="modes/maimai/machine-sprites.css?v=4">
+  <link rel="stylesheet" href="modes/maimai/machine-sprites.css?v=6">
 </head>
 <body>
   <header class="topbar">
@@ -84,6 +84,32 @@
     <section class="playfield-panel">
       <canvas id="playfield"></canvas>
       <section id="maiMachine" hidden aria-label="maimai machine">
+        <div id="maiCameraTools" class="machine-camera-tools" role="group" aria-label="Export camera controls" hidden>
+          <div class="machine-viewfinder" aria-hidden="true"><i></i><i></i><i></i><i></i><div class="machine-camera-guides"><span></span></div></div>
+          <div class="machine-camera-top">
+            <output id="maiCameraSize" aria-label="Export aspect ratio and resolution"></output>
+            <div id="maiCameraSettings" class="machine-camera-settings">
+              <button id="maiCameraSettingsToggle" type="button" aria-label="Camera settings" aria-expanded="false" aria-controls="maiCameraSettingsPanel" title="Camera settings">⚙</button>
+              <div id="maiCameraSettingsPanel" class="machine-camera-settings-panel" hidden>
+                <button id="maiCameraAA" type="button" aria-label="Anti-aliasing" aria-pressed="true"><span>Anti-aliasing</span><span aria-hidden="true"></span></button>
+                <button id="maiCameraGrid" type="button" aria-label="Thirds grid" aria-pressed="false"><span>Thirds grid</span><span aria-hidden="true"></span></button>
+              </div>
+            </div>
+            <button id="maiCameraClose" type="button" aria-label="Exit camera preview" title="Exit camera preview">×</button>
+          </div>
+          <div class="machine-camera-bottom">
+            <div class="machine-camera-adjustments">
+              <div class="machine-camera-zoom" role="group" aria-label="Camera zoom">
+                <button id="maiCameraZoomOut" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+                <output id="maiCameraZoomValue" aria-label="Zoom relative to preset" aria-live="off">1.0×</output>
+                <button id="maiCameraZoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+              </div>
+              <button id="maiCameraReset" type="button" aria-label="Reset camera framing" title="Reset camera framing">↺</button>
+            </div>
+            <button id="maiCameraRender" type="button" aria-describedby="maiCameraRenderHint"><span aria-hidden="true"></span>Render MP4</button>
+            <small id="maiCameraRenderHint">Video starts at the chart intro</small>
+          </div>
+        </div>
         <div class="machine-shell" tabindex="-1">
           <canvas id="machineBloom" width="160" height="245" aria-hidden="true"></canvas>
           <div class="machine-marquee"><div class="machine-monitor">
@@ -184,6 +210,7 @@
                 <option value="both">Both centered</option><option value="angled">Both angled</option>
               </optgroup>
             </select></label>
+            <button id="maiCameraPreview" type="button" hidden>Preview camera</button>
             <button id="maiExportStart" type="button">Export MP4 · 1080p60</button>
             <details id="maiDiagnostics" hidden><summary></summary><ul></ul></details>
           </div>
@@ -492,24 +519,24 @@
   <script src="modes/stepmania/index.js?v=40"></script>
   <script src="modes/maimai/geometry.js?v=1"></script>
   <script src="modes/maimai/parser.js?v=8"></script>
-  <script src="modes/maimai/intro.js?v=3"></script>
-  <script src="modes/maimai/machine-export.js?v=3"></script>
+  <script src="modes/maimai/intro.js?v=4"></script>
+  <script src="modes/maimai/machine-export.js?v=6"></script>
   <script src="modes/maimai/export.js?v=5"></script>
-  <script src="modes/maimai/export-ui.js?v=3"></script>
-  <script src="modes/maimai/clear.js?v=4"></script>
-  <script src="modes/maimai/cabinet.js?v=29"></script>
-  <script src="modes/maimai/machine-settings.js?v=2"></script>
-  <script src="modes/maimai/machine.js?v=18"></script>
-  <script src="modes/maimai/renderer.js?v=41"></script>
+  <script src="modes/maimai/export-ui.js?v=7"></script>
+  <script src="modes/maimai/clear.js?v=5"></script>
+  <script src="modes/maimai/cabinet.js?v=33"></script>
+  <script src="modes/maimai/machine-settings.js?v=4"></script>
+  <script src="modes/maimai/machine.js?v=23"></script>
+  <script src="modes/maimai/renderer.js?v=43"></script>
   <script src="modes/maimai/audio.js?v=5"></script>
   <script src="modes/maimai/index.js?v=8"></script>
   <script src="modes/maimai/mai-notes.js?v=3"></script>
-  <script src="modes/ugc/visuals.js?v=15"></script>
+  <script src="modes/ugc/visuals.js?v=31"></script>
   <script src="modes/ugc/curves.js?v=3"></script>
-  <script src="modes/ugc/surfaces.js?v=3"></script>
-  <script src="modes/ugc/renderer.js?v=26"></script>
+  <script src="modes/ugc/surfaces.js?v=4"></script>
+  <script src="modes/ugc/renderer.js?v=45"></script>
   <script src="modes/ugc/sus.js?v=1"></script>
-  <script src="modes/ugc/index.js?v=57"></script>
-  <script src="app.js?v=124"></script>
+  <script src="modes/ugc/index.js?v=61"></script>
+  <script src="app.js?v=129"></script>
 </body>
 </html>

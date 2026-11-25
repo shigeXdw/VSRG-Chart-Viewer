@@ -8,7 +8,7 @@ The loader looks beside each chart for `track.mp3`, `track.ogg`, or another supp
 
 The cabinet uses separate plastic, button and dark-trim materials and a slowly cycling canopy. A small modeled falloff texture adds soft light around the screens and button reflections on the plastic. Lighting uses the original cabinet surface without an extra fascia shell, runtime path tracing or a bloom pass. Reduced-motion preferences stop the canopy cycle. The side pods have a lit outer diffuser, a cyan inner ring and an original perforated face mapped onto the existing mesh. The front canopy uses a soft internal-light falloff. The converted mesh assigns the complete canopy, including its bevels and rear edge, a separate material from the inset speaker panel. The upright side-pod supports and rear housing retain dark, non-emissive materials.
 
-The body has a milky plastic finish; the ring and caps use glossy plastic. TOUCH / TOUCH HOLD, moving slides and their associated starting stars, and available menu controls use a precomputed LED/diffuser glow on the outward-facing button walls and adjacent plastic. Ordinary TAP and HOLD illuminate the entire cap with a broad internal-light pattern and spill around its full perimeter: the inner bezel, side gaps and outer body. The wall pattern approximates a dense LED strip with a broad, smooth inward fade. The channels can overlap independently. A/B touch sensors map to their button direction; D/E share the glow between neighboring directions, while center-C touches do not light the outer ring. Menu colors and angles match their controls. Autoplay lights remain on for 0.5 seconds after release, then fade out over 0.25 seconds.
+The body has a milky plastic finish; the ring and caps use glossy plastic. TOUCH / TOUCH HOLD, moving slides and their associated starting stars, and available menu controls use a precomputed LED/diffuser glow on the outward-facing button walls and adjacent plastic. Ordinary TAP and HOLD illuminate the entire cap with a broad internal-light pattern and spill around its full perimeter: the inner bezel, side gaps and outer body. The wall pattern approximates a dense LED strip with a broad, smooth inward fade. The channels can overlap independently. A/B touch sensors map to their button direction; D/E share the glow between neighboring directions, while center-C touches do not light the outer ring. Menu colors and angles match their controls. Autoplay lights default to a 500 ms hold and a 250 ms fade after release.
 
 Load a maimai chart, then enable **Virtual Cabinet mode** in the maimai settings. The rotatable DX cabinet has two synchronized circular screens, live top displays and illuminated buttons. Both sides show the selected chart. Import a song folder or pack to browse its available difficulties. **Back** from difficulty selection opens the imported song list.
 
@@ -54,12 +54,12 @@ The browser parser, path geometry, and Canvas sprites are implemented in this re
 - The reference note loader schedules heads and traces separately. The slide translator and geometry describe button orientation, arcs, loops and connected tracks. [Note loader](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Scenes/Game/NoteLoader.cs) · [Slide translator](https://github.com/TeamMajdata/MajdataPlay/blob/33250cf75ba2d3256d48583797b31b45fcf9e987/Assets/Scripts/Scenes/Game/Misc/Parsing/SimaiSlideTranslator.cs) · [Simai notation](https://w.atwiki.jp/simai/pages/1003.html)
 - An external comparison ran MajSimai 3.0.1 from that revision against all 14 included original-song charts. Across 41 difficulties, all 22,158 objects matched on type, button or center sensor, and onset within 0.1 ms, and on hold duration, slide start and slide duration within 1 ms. This comparison covers parsing and timing. The viewer generates its own artwork and samples slide paths by distance. Unity frame-for-frame appearance and proprietary extensions such as extended slide code and scripted scenes are outside this validation.
 - Six slide centerlines were checked against the ordered marker positions in the reference prefabs. At equal fractions of path length, the largest observed distance ranged from less than 0.1% of the judgment radius for the straight line and outer arc to about 3.7% for the zigzag. The viewer uses analytical turns and distance sampling rather than importing those prefab coordinates.
-- Run `node --test tests/*.test.cjs` for the mechanics tests. The optional Chromium test in `tests/browser-smoke.cjs` also covers ZIP import, selecting difficulties, deterministic redraw after seeking, the inspector, and switching to other formats. The [original demo chart](../tests/fixtures/maimai/maidata.txt) can be used without media.
-
 
 ## Machine menus
 
 Virtual Cabinet mode opens an animated difficulty carousel. **Next** opens the ready screen, where the selected chart sits between **Speed & Sound** and **Viewer Options**. Select an options card to adjust the same settings used by the sidebar; changes apply immediately.
+
+In **Viewer Options → Button Lights**, adjust the light hold and fade times in 50 ms steps. Choose separate colors for full-button tap and hold lights and outer-wall touch and slide lights. **Note colors** follows the chart colors. Timing options pulse the ring, and the color options animate a dark spot around the lit buttons. The settings apply to Virtual Cabinet playback and cabinet MP4 exports.
 
 Use the illuminated cabinet buttons or the keyboard: Left/Right select, Up/Down adjust, PageUp/PageDown switch settings categories, Enter continues, and Escape goes back. The result screen returns to difficulty selection. The upper display shows achievement during autoplay and a judgment breakdown at the end. Menu artwork uses original PNG sprites, including curved radial buttons, card frames, settings panels and upper-screen frames. Text and values remain live; no arcade menu assets are bundled.
 
@@ -71,13 +71,15 @@ Play opens a pastel song card with the selected difficulty, level, jacket and ch
 
 ## Autoplay clear
 
-After the track and final note effect finish, the circular field shows CLEAR. A diagonal shutter closes, holds for one chart second, and opens onto the result. The song panel uses the loaded jacket when available. The rows show the chart’s TAP, HOLD, SLIDE, TOUCH and BREAK totals and shares; the bottom strip shows the final autoplay DELUXE rate. Seeking back restores the playfield, and Replay starts the chart again.
+After the track and final note effect finish, the circular field shows CLEAR. The circular transition from the Decide screen closes and immediately opens onto the result. The song panel uses the loaded jacket when available. The rows show the chart’s TAP, HOLD, SLIDE, TOUCH and BREAK totals and shares. The bottom strip shows the final autoplay DELUXE rate. Seeking back restores the playfield, and Replay starts the chart again.
 
-![Clear animation, diagonal shutter and autoplay result for the viewer demo](images/mai-clear.gif)
+![CLEAR animation, circular reveal and autoplay result for the viewer demo](images/mai-clear.gif)
 
 ## Export video
 
 In the maimai settings, select an **Export camera**, then choose **Export MP4**. **Current mode · automatic** uses the left-angle cabinet view in Virtual Cabinet mode and the flat playfield otherwise. Drag the progress bar by its header to move it. Choose **Save MP4** when the render finishes, or **Cancel** to discard a running export.
+
+Choosing a cabinet preset opens a portrait or landscape viewfinder in the player. Drag to orbit, right-drag or Shift-drag to pan, and scroll to zoom. On a touchscreen, use one finger to orbit and two fingers to pan or pinch. The viewfinder has zoom buttons, a zoom readout relative to the preset, and a framing reset. The camera settings popover contains **Anti-aliasing** and an optional **Thirds grid**. Framing guides fade when the camera settles. Press **Render MP4** in the viewfinder or **Export MP4** in the sidebar to use the current viewpoint. The viewfinder controls stay out of the video.
 
 The export renders the selected difficulty from the intro through the final result at 60 frames per second.
 
@@ -87,10 +89,8 @@ The export renders the selected difficulty from the intro through the final resu
 | Left angle (B), right angle, centered station | 1080 × 1920 portrait |
 | Both centered, both angled | 1920 × 1080 landscape |
 
-Cabinet presets use fixed cameras with a longer lens. The right view changes the camera position without mirroring the chart. Both-station views show the same selected chart on each station. The upper displays and button lighting follow the export timeline. Rendering uses a separate scene and leaves the live camera and playback position unchanged. Cabinet exports include model attribution; the cabinet asset’s license still applies.
+Cabinet presets start with fixed camera angles. The right view changes the camera position without mirroring the chart. Both-station views show the same selected chart on each station. The upper displays and button lighting follow the export timeline. Rendering uses a separate scene and leaves the live camera and playback position unchanged. Cabinet exports include model attribution; the cabinet asset’s license still applies.
 
 The video encoder targets 32 Mbps (about 240 MB per minute of video at that rate). Actual size depends on the encoder and scene. It uses the playback speed, pitch setting, volume, hitsound switch and maimai playfield settings selected at the start. Extra info appears when enabled in playfield exports; cabinet exports use the upper display. The surrounding background is black. Include the song's audio, image and video files when opening a local chart. Mai Notes imports can use the viewer's hitsounds.
 
 Rendering takes place locally. For 1080p60 video the exporter first requests hardware encoding for H.264, VP9 and AV1, in that order. If the browser reports no matching configuration, it tries the browser defaults. The progress bar shows the selected codec and preference. The browser controls which encoder fulfills the request. Audio is mixed separately and stored as AAC, Opus or PCM.
-
-The optional `node tests/maimai-export.cjs` check creates a short chart and media locally, downloads the export, and verifies its frame count, dimensions, audio and black border. Set `EXPORT_CAMERA=left`, `right`, `center`, `both` or `angled` to check a cabinet preset instead of the flat view. Set `BROWSER=firefox` and `BROWSER_EXE` to use Firefox. It uses the same Playwright configuration as the browser smoke test and requires FFmpeg and ffprobe on PATH.

@@ -10,6 +10,10 @@ Machine mode loads a tree-shaken browser bundle of Three.js 0.187.0, OrbitContro
 
 The 3D cabinet geometry in `assets/maimai-cabinet/mesh.js` is adapted from **maimaiDX Style Model** by **藍玉CiAN (Cyanarisu)**. This asset uses **CC BY-NC-SA 4.0**, including attribution, noncommercial use and ShareAlike requirements. Coordinate conversion, material grouping, assembly and compression were added for the viewer. [Original model](https://makerworld.com/en/models/1126413-maimaidx-style-model) · [Asset license and modification details](assets/maimai-cabinet/LICENSE.md).
 
+## Vellum Interface SFX
+
+The cabinet UI sounds in `assets/maimai-ui/audio/` are four unmodified clips from **Vellum Interface SFX** by Colorosse. [Original pack](https://colorosse.com/assets/audio/sfx/vellum-ui-sfx) · [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+
 ## Mediabunny
 
 The maimai MP4 exporter loads the unmodified Mediabunny 1.65.2 browser bundle in `vendor/mediabunny.min.js`. Copyright © Vanilagy and contributors. The bundle is distributed under the [Mozilla Public License 2.0](vendor/mediabunny.LICENSE). The [corresponding source package](https://registry.npmjs.org/mediabunny/-/mediabunny-1.65.2.tgz) includes the TypeScript sources and license.

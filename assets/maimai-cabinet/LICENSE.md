@@ -14,9 +14,3 @@ The adaptation extracts the cabinet body, one reusable button ring, center conso
 The viewer uses small procedurally generated light-falloff textures with its own material shaders; it does not include a physically baked scattering shell. A shared 256 × 128 button lookup approximates a dense strip of nine recessed LEDs, their diffuser wall, and outward illumination on nearby plastic. This is precomputed modeled lighting rather than a ray-traced light bake.
 
 `menu-landscape.svg` is original viewer artwork, independent of the cabinet model, and is covered by the project's MIT license.
-
-To reproduce the asset, run this command from the repository root (NumPy and trimesh required):
-
-```sh
-python tools/convert-maimai-cabinet.py path/to/mai.3mf
-```

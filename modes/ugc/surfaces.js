@@ -24,9 +24,12 @@
     const fragment = compile(gl.FRAGMENT_SHADER, `
       precision mediump float;
       uniform sampler2D u_texture;
-      uniform float u_opacity;
+      uniform vec3 u_alpha;
       varying vec2 v_uv;
-      void main() { gl_FragColor = texture2D(u_texture, v_uv) * u_opacity; }
+      void main() {
+        float fade = smoothstep(u_alpha.y, u_alpha.z, v_uv.y);
+        gl_FragColor = texture2D(u_texture, v_uv) * (u_alpha.x * fade);
+      }
     `);
     const program = gl.createProgram();
     gl.attachShader(program, vertex); gl.attachShader(program, fragment); gl.linkProgram(program);
@@ -39,7 +42,7 @@
     gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 4, gl.FLOAT, false, 24, 0);
     gl.enableVertexAttribArray(uv); gl.vertexAttribPointer(uv, 2, gl.FLOAT, false, 24, 16);
     gl.uniform1i(gl.getUniformLocation(program, "u_texture"), 0);
-    const opacity = gl.getUniformLocation(program, "u_opacity");
+    const alphaProfile = gl.getUniformLocation(program, "u_alpha");
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     const textures = new Map(), vertices = new Float32Array(36);
@@ -60,7 +63,7 @@
         gl.viewport(0, 0, w, h); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); count = 0;
         return true;
       },
-      draw(image, quad, width, height, region, alpha = 1) {
+      draw(image, quad, width, height, region, alpha = 1, topFade = 0) {
         let texture = textures.get(image);
         if (!texture) {
           texture = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -75,7 +78,7 @@
         const left = region ? region[0] / image.width : 0, top = region ? region[1] / image.height : 0;
         const right = region ? (region[0] + region[2]) / image.width : 1, bottom = region ? (region[1] + region[3]) / image.height : 1;
         const indices = [0, 1, 2, 0, 2, 3], coords = [[left, top], [right, top], [right, bottom], [left, bottom]];
-        gl.uniform1f(opacity, alpha);
+        gl.uniform3f(alphaProfile, alpha, topFade ? top : -1, topFade ? top + (bottom - top) * topFade : 0);
         for (let i = 0; i < 6; i++) {
           const index = indices[i], point = quad[index], w = point.cameraDepth / 1024, offset = i * 6;
           vertices[offset] = (point.x / width * 2 - 1) * w;
